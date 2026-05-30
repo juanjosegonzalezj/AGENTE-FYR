@@ -44,6 +44,22 @@ export function initWhatsApp(
 
   waClient.on('qr', async (qr: string) => {
     logger.info('WhatsApp QR code generated — scan to connect');
+
+    // Print QR directly to terminal as ASCII art
+    try {
+      const qrText = await qrcode.toString(qr, { type: 'terminal', small: true });
+      console.log('\n\n' + '='.repeat(60));
+      console.log('  📱  ESCANEA ESTE QR CON WHATSAPP');
+      console.log('='.repeat(60));
+      console.log(qrText);
+      console.log('='.repeat(60));
+      console.log('  WhatsApp → ⋮ → Dispositivos vinculados → Vincular');
+      console.log('='.repeat(60) + '\n');
+    } catch {
+      console.log('\n[WhatsApp QR generado — abre http://localhost:3001/webhooks/whatsapp/qr en el navegador]\n');
+    }
+
+    // Also save as data URL for the web endpoint
     try {
       qrDataUrl = await qrcode.toDataURL(qr);
     } catch {

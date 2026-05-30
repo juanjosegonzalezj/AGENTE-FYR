@@ -65,7 +65,7 @@ function loadConfig() {
     // Strip placeholder values so defaults kick in
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY?.startsWith('sk-ant-')
       ? process.env.ANTHROPIC_API_KEY : undefined,
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY?.startsWith('eyJ')
+    SUPABASE_SERVICE_ROLE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY?.startsWith('eyJ') || process.env.SUPABASE_SERVICE_ROLE_KEY?.startsWith('sb_secret_'))
       ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID?.includes('.apps.googleusercontent.com')
       ? process.env.GOOGLE_CLIENT_ID : undefined,
@@ -76,7 +76,8 @@ function loadConfig() {
   // Warn about missing keys
   const missing: string[] = [];
   if (!process.env.ANTHROPIC_API_KEY?.startsWith('sk-ant-')) missing.push('ANTHROPIC_API_KEY');
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.startsWith('eyJ')) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  const srk = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  if (!srk.startsWith('eyJ') && !srk.startsWith('sb_secret_')) missing.push('SUPABASE_SERVICE_ROLE_KEY');
   if (missing.length) {
     console.warn(`\n⚠️  Missing API keys (some features won't work): ${missing.join(', ')}\n`);
   }
