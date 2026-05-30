@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Find Your Rival – WhatsApp QR</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f0fdf4; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+  .card { background: white; border-radius: 16px; padding: 32px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
+  h1 { color: #16a34a; margin: 0 0 8px; font-size: 1.4rem; }
+  p { color: #6b7280; font-size: 0.9rem; margin: 4px 0 24px; }
+  #qr-img { width: 280px; height: 280px; border: 2px solid #e5e7eb; border-radius: 8px; }
+  #status { margin-top: 16px; font-size: 0.85rem; font-weight: 600; }
+  .connected { color: #16a34a; }
+  .waiting   { color: #d97706; }
+  .error     { color: #dc2626; }
+  .spinner   { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎾 Find Your Rival</h1>
+  <p>Escanea este QR con WhatsApp para conectar el asistente IA</p>
+
+  <img id="qr-img" src="" alt="QR Code" style="display:none" />
+  <div id="qr-placeholder" style="width:280px;height:280px;border:2px dashed #d1d5db;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:2rem">⏳</div>
+
+  <div id="status" class="waiting">
+    <span class="spinner">⟳</span> Conectando con el servidor...
+  </div>
+
+  <div style="margin-top:20px;background:#f9fafb;border-radius:8px;padding:12px;font-size:0.8rem;color:#374151;text-align:left">
+    <strong>Cómo escanear:</strong><br>
+    1. Abre WhatsApp en tu móvil<br>
+    2. ⋮ (tres puntos) → Dispositivos vinculados<br>
+    3. → Vincular dispositivo<br>
+    4. Escanea este QR
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:3001';
+  const img = document.getElementById('qr-img');
+  const placeholder = document.getElementById('qr-placeholder');
+  const statusEl = document.getElementById('status');
+
+  async function fetchQR() {
+    try {
+      const res = await fetch(API + '/webhooks/whatsapp/qr');
+      const data = await res.json();
+
+      if (data.status === 'connected') {
+        img.style.display = 'none';
+        placeholder.textContent = '✅';
+        placeholder.style.display = 'flex';
+        placeholder.style.fontSize = '4rem';
+        statusEl.className = 'status connected';
+        statusEl.textContent = '✅ WhatsApp conectado correctamente';
+        return; // Stop polling
+      }
+
+      if (data.status === 'pending' && data.qr_data_url) {
+        img.src = data.qr_data_url;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+        statusEl.className = 'status waiting';
+        statusEl.innerHTML = '📱 Escanea el QR con tu WhatsApp';
+      } else {
+        placeholder.textContent = '⏳';
+        statusEl.className = 'status waiting';
+        statusEl.innerHTML = '<span class="spinner">⟳</span> Inicializando WhatsApp... (puede tardar ~20s)';
+      }
+    } catch {
+      statusEl.className = 'status error';
+      statusEl.textContent = '❌ Servidor no encontrado. ¿Está corriendo npm run dev?';
+    }
+
+    setTimeout(fetchQR, 3000); // Poll every 3s
+  }
+
+  fetchQR();
+</script>
+</body>
+</html>

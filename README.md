@@ -1,169 +1,266 @@
-# FindYourRival – Agente IA Backend
+# 🎾 Find Your Rival – AI-Powered Sports Complex Platform v2.0
 
-Backend del agente de matchmaking deportivo de FindYourRival.  
-Registra jugadores, encuentra rivales compatibles y les envía mensajes automáticos por WhatsApp.
-
----
-
-## Requisitos
-
-- Node.js 18+
-- Cuenta en [Supabase](https://supabase.com)
-- WhatsApp activo en tu celular
+Production-ready multi-tenant SaaS for sports complex management.
+AI assistant (Claude) + Google Calendar + WhatsApp + Supabase.
 
 ---
 
-## Instalación
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Next.js 15 Admin Dashboard  (web/)      :3000          │
+│  Dashboard · Courts · Reservations · Players            │
+│  Analytics · AI Chat · Settings                         │
+└─────────────────┬───────────────────────────────────────┘
+                  │ HTTP (X-Tenant-ID header)
+┌─────────────────▼───────────────────────────────────────┐
+│  Node.js / TypeScript API  (server.ts)   :3001          │
+│  Express · Helmet · CORS · Rate Limiting                │
+│  Tenant Middleware · Auth (Supabase JWT)                │
+│  REST: /api/v1/courts|reservations|players|ai|calendar  │
+└───────┬──────────────┬──────────────┬───────────────────┘
+        │              │              │
+   ┌────▼────┐   ┌─────▼─────┐  ┌───▼──────────┐
+   │ Claude  │   │  Google   │  │  WhatsApp    │
+   │ Sonnet  │   │ Calendar  │  │  Web.js      │
+   │ (Tools) │   │  API v3   │  │  (QR Auth)   │
+   └────┬────┘   └─────┬─────┘  └───┬──────────┘
+        └──────────────┴─────────────┘
+                        │
+┌───────────────────────▼─────────────────────────────────┐
+│  Supabase PostgreSQL                                     │
+│  sports_complexes · courts · players · reservations     │
+│  matches · conversations · messages · court_calendars   │
+│  Row-Level Security (multi-tenant isolation)            │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Quick Start
+
+### 1. Install backend dependencies
 
 ```bash
-cd "Agente IA FYR"
 npm install
 ```
 
----
+### 2. Install frontend dependencies
 
-## Configurar variables de entorno
+```bash
+cd web && npm install && cd ..
+```
 
-Copia el ejemplo y rellena tus valores:
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
+# Edit .env: fill SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
+#            ANTHROPIC_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 ```
-
-Edita `.env`:
-
-```env
-PORT=3001
-SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_KEY=tu_service_role_key
-TABLE_NAME=jugadores
-```
-
-> **Importante:** Para operaciones de escritura en el servidor usa la clave `service_role` (no la `anon`).  
-> La encuentras en Supabase → Project Settings → API → Service Role Key.
-
----
-
-## Configurar Supabase
-
-1. Entra a [supabase.com](https://supabase.com) → tu proyecto → **Table Editor**.
-2. Crea la tabla `jugadores` con estas columnas:
-
-| Columna          | Tipo    | Notas                        |
-|------------------|---------|------------------------------|
-| `id`             | uuid    | Primary key, auto-generado   |
-| `nombre_capitan` | text    | Requerido                    |
-| `telefono`       | text    | Requerido, único             |
-| `sport_type`     | text    | `fútbol`, `pádel` o `ambas`  |
-| `created_at`     | timestamptz | Default: `now()`         |
-
-3. Si el nombre de tu tabla es diferente, ajusta `TABLE_NAME` en `.env`.
-
----
-
-## Correr el backend
 
 ```bash
-npm start
-# o en modo desarrollo (recarga automática):
+cp web/.env.local.example web/.env.local
+# Edit web/.env.local: fill NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+### 4. Run Supabase migrations
+
+In Supabase Dashboard → SQL Editor, run in order:
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_rls_policies.sql`
+3. `supabase/migrations/003_indexes.sql`
+4. `supabase/migrations/004_functions.sql`
+5. `supabase/seed.sql` ← optional demo data
+
+### 5. Start development
+
+```bash
+# Terminal 1 — Backend API
 npm run dev
+
+# Terminal 2 — Admin Dashboard
+cd web && npm run dev
 ```
 
-La terminal mostrará algo como:
+- **Admin Dashboard**: http://localhost:3000
+- **API**: http://localhost:3001
+- **Health Check**: http://localhost:3001/health
+- **WhatsApp QR**: http://localhost:3001/webhooks/whatsapp/qr
 
+---
+
+## AI Agent
+
+Claude Sonnet with 8 real-data tools. **Never invents data.**
+
+| Tool | What it does |
+|------|-------------|
+| `get_available_courts` | Reads Google Calendar freebusy API |
+| `create_booking` | Creates DB reservation + Calendar event |
+| `cancel_booking` | Cancels DB record + deletes Calendar event |
+| `reschedule_booking` | Moves slot in DB + Calendar |
+| `find_opponents` | ELO-based matchmaking from players DB |
+| `get_player_profile` | Player stats and skill info |
+| `get_complex_information` | Courts, sports, pricing |
+| `get_reservation_details` | Full reservation info |
+
+**Example conversations that work:**
 ```
-[HH:MM:SS] OK    Servidor corriendo en http://localhost:3001
-[HH:MM:SS] INFO  QR de WhatsApp disponible en http://localhost:3001/whatsapp/qr
+"Quiero reservar una pista de pádel mañana a las 7"
+"Busca un rival de tenis para el sábado por la tarde"
+"Cancela mi reserva del jueves"
+"¿Qué pistas están disponibles esta noche?"
+"¿Cuánto cuesta una hora de tenis?"
 ```
 
 ---
 
-## Conectar WhatsApp (escanear QR)
+## API Reference
 
-1. Con el servidor corriendo, abre en tu navegador:  
-   **http://localhost:3001/whatsapp/qr**
+All routes require `X-Tenant-ID: <complex-uuid>` header.
 
-2. Aparecerá un código QR. Ábrelo desde tu celular:  
-   WhatsApp → ⋮ (tres puntos) → **Dispositivos vinculados** → **Vincular dispositivo**
-
-3. Escanea el QR. La página se actualizará automáticamente y verás:  
-   `✅ WhatsApp ya está conectado.`
-
-4. La sesión se guarda en `.wwebjs_auth/` — **no necesitas escanear el QR cada vez**.
-
----
-
-## Endpoint principal
-
-### `POST /join-matchmaking`
-
-Registra un jugador y notifica automáticamente a rivales compatibles por WhatsApp.
-
-**Body (JSON):**
-
-```json
-{
-  "nombre_capitan": "Carlos López",
-  "telefono": "3001234567",
-  "sport_type": "fútbol"
-}
-```
-
-**Valores válidos para `sport_type`:** `fútbol`, `pádel`, `ambas`
-
-**Lógica de matchmaking:**
-
-| Deporte solicitado | Capitanes contactados        |
-|--------------------|------------------------------|
-| `fútbol`           | fútbol + ambas               |
-| `pádel`            | pádel + ambas                |
-| `ambas`            | fútbol + pádel + ambas       |
-
-**Respuesta exitosa (201):**
-
-```json
-{
-  "success": true,
-  "message": "Registro exitoso. Se encontraron 3 rival(es) compatible(s).",
-  "user": { ... },
-  "rivals_found": 3,
-  "notifications_sent": 3,
-  "notifications_failed": 0,
-  "notification_details": [...]
-}
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api/v1/courts` | List courts (`?sport=padel`) |
+| POST | `/api/v1/courts` | Create court |
+| GET | `/api/v1/courts/:id/availability` | Real-time slots (`?date=YYYY-MM-DD`) |
+| GET | `/api/v1/reservations` | List reservations |
+| POST | `/api/v1/reservations` | Create reservation |
+| PATCH | `/api/v1/reservations/:id` | Modify reservation |
+| DELETE | `/api/v1/reservations/:id` | Cancel reservation |
+| GET | `/api/v1/players` | List players |
+| POST | `/api/v1/players` | Create player |
+| POST | `/api/v1/ai/chat` | **AI assistant chat** |
+| GET | `/api/v1/analytics/summary` | Dashboard KPIs |
+| GET | `/api/v1/analytics/occupancy` | Court occupancy |
+| GET | `/api/v1/analytics/revenue` | Revenue by day |
+| GET | `/api/v1/calendar/connect` | Start Google OAuth |
+| POST | `/api/v1/calendar/link` | Link calendar to court |
+| GET | `/webhooks/whatsapp/qr` | WhatsApp QR code |
+| GET | `/webhooks/whatsapp/status` | WhatsApp connection status |
 
 ---
 
-## Otros endpoints
+## Environment Variables
 
-| Método | Ruta                | Descripción                              |
-|--------|---------------------|------------------------------------------|
-| GET    | `/health`           | Estado del servidor                      |
-| GET    | `/whatsapp/status`  | Verifica si WhatsApp está conectado      |
-| GET    | `/whatsapp/qr`      | Página web con el QR para escanear       |
+### Backend (.env)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUPABASE_URL` | ✅ | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | ✅ | Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key |
+| `ANTHROPIC_API_KEY` | ✅ | Claude API key (`sk-ant-...`) |
+| `GOOGLE_CLIENT_ID` | ✅ | Google OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET` | ✅ | Google OAuth 2.0 Client Secret |
+| `GOOGLE_REDIRECT_URI` | ✅ | OAuth callback URL |
+| `ENCRYPTION_KEY` | ✅ | 32+ char random string |
+| `PORT` | ❌ | Default: 3001 |
+
+### Frontend (web/.env.local)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
+| `NEXT_PUBLIC_API_URL` | ❌ | Backend URL (default: localhost:3001) |
 
 ---
 
-## Estructura del proyecto
+## Google Calendar Setup
+
+1. [Google Cloud Console](https://console.cloud.google.com) → New project
+2. Enable **Google Calendar API**
+3. Credentials → OAuth 2.0 Client ID → Web application
+4. Authorized redirect URI: `http://localhost:3001/api/v1/calendar/oauth/callback`
+5. Copy Client ID & Secret into `.env`
+6. Admin Dashboard → Settings → Connect Google Calendar
+7. Assign each court its own calendar
+
+---
+
+## WhatsApp Setup
+
+1. Start the backend: `npm run dev`
+2. Visit: http://localhost:3001/webhooks/whatsapp/qr
+3. Scan the QR with WhatsApp on your phone
+4. The AI will now respond to all incoming messages automatically
+5. Session saved to `whatsapp-session/` — no re-scan needed after restart
+
+---
+
+## Multi-Tenant Design
+
+- Every DB table has `complex_id` FK
+- PostgreSQL RLS enforces tenant isolation at the database level
+- Tenant resolved via `X-Tenant-ID` header or `X-Tenant-Slug`
+- WhatsApp: tenant resolved by matching business phone number
+- No data leakage between sports complexes possible
+
+---
+
+## Project Structure
 
 ```
-Agente IA FYR/
+find-your-rival/
+├── server.ts                    # Express entry point
 ├── src/
-│   ├── config/
-│   │   └── supabase.js          # Cliente de Supabase
-│   ├── controllers/
-│   │   └── matchmakingController.js
-│   ├── routes/
-│   │   ├── matchmakingRoutes.js
-│   │   └── whatsappRoutes.js
-│   ├── services/
-│   │   ├── matchmakingService.js  # Lógica de BD y matchmaking
-│   │   └── whatsappService.js     # Integración WhatsApp Web
-│   └── utils/
-│       └── logger.js              # Logger con colores
-├── server.js
-├── .env
-├── .env.example
-└── README.md
+│   ├── config/index.ts          # Env validation (Zod)
+│   ├── types/index.ts           # All TypeScript types
+│   ├── utils/logger.ts          # Winston logger
+│   ├── db/
+│   │   ├── client.ts            # Supabase clients
+│   │   └── queries/             # Typed DB queries
+│   ├── ai/
+│   │   ├── agent.ts             # Claude orchestrator
+│   │   ├── prompts.ts           # System prompts
+│   │   └── tools/               # 8 tool implementations
+│   ├── integrations/
+│   │   ├── google-calendar/     # OAuth, events, availability
+│   │   └── whatsapp/            # Client, handler, sender
+│   ├── middleware/              # Auth, tenant, rate-limit
+│   └── routes/                  # API v1 + webhooks
+├── supabase/
+│   ├── migrations/              # SQL migrations 001-004
+│   └── seed.sql                 # Demo data
+└── web/                         # Next.js 15 admin dashboard
+    ├── app/
+    │   ├── (auth)/login/
+    │   └── (dashboard)/
+    │       ├── page.tsx         # Overview
+    │       ├── courts/
+    │       ├── reservations/
+    │       ├── players/
+    │       ├── analytics/
+    │       ├── ai/              # AI Chat UI
+    │       └── settings/
+    ├── components/
+    └── lib/
 ```
+
+---
+
+## Deployment
+
+### Backend → Railway / Render
+
+```bash
+npm run build && npm start
+```
+
+Set all environment variables in the dashboard.
+
+### Frontend → Vercel
+
+```bash
+cd web && vercel --prod
+```
+
+Point `NEXT_PUBLIC_API_URL` to your Railway/Render backend URL.
+
+---
+
+*Built with Claude Sonnet · Supabase · Google Calendar · WhatsApp*
