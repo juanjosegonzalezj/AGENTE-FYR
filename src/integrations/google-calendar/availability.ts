@@ -1,167 +1,107 @@
-import { getCalendarClient } from './client.js';
-import { getCourtCalendar } from '../../db/queries/courts.js';
-import { db } from '../../db/client.js';
-import type { AvailabilitySlot, CourtAvailability } from '../../types/index.js';
+import { google } from 'googleapis';
+import { getCalendarClient, getCalendarId } from './client.js';
+import { config } from '../../config/index.js';
+import type { SlotDisponible } from '../../types/index.js';
 import logger from '../../utils/logger.js';
 
-// Operating hours
-const OPEN_HOUR  = 8;   // 08:00
-const CLOSE_HOUR = 23;  // 23:00
-const SLOT_MINUTES = 60;
+const HORA_APERTURA = 6;   // 06:00
+const HORA_CIERRE   = 23;  // 23:00
+const TZ = 'America/Bogota';
 
-// Check Redis-like cache in Supabase availability table (TTL: 10 min)
-async function getCachedSlots(
-  courtId: string,
-  date: string
-): Promise<AvailabilitySlot[] | null> {
-  const { data } = await db.client
-    .from('availability')
-    .select('slots, last_synced_at')
-    .eq('court_id', courtId)
-    .eq('date', date)
-    .single();
+function generarSlots(
+  fecha: string,
+  periodosBloqueados: Array<{ start: string; end: string }>
+): SlotDisponible[] {
+  const slots: SlotDisponible[] = [];
 
-  if (!data) return null;
+  for (let hora = HORA_APERTURA; hora < HORA_CIERRE; hora++) {
+    const ini  = `${hora.toString().padStart(2, '0')}:00`;
+    const fin  = `${(hora + 1).toString().padStart(2, '0')}:00`;
+    const iniDt = new Date(`${fecha}T${ini}:00`);
+    const finDt = new Date(`${fecha}T${fin}:00`);
 
-  const age = Date.now() - new Date(data.last_synced_at).getTime();
-  if (age > 10 * 60 * 1000) return null; // expired
-
-  return data.slots as AvailabilitySlot[];
-}
-
-async function cacheSlots(
-  complexId: string,
-  courtId: string,
-  date: string,
-  slots: AvailabilitySlot[]
-): Promise<void> {
-  await db.client.from('availability').upsert(
-    { complex_id: complexId, court_id: courtId, date, slots, last_synced_at: new Date().toISOString() },
-    { onConflict: 'court_id,date' }
-  );
-}
-
-function generateSlots(
-  date: string,
-  busyPeriods: Array<{ start: string; end: string }>,
-  timezone: string
-): AvailabilitySlot[] {
-  const slots: AvailabilitySlot[] = [];
-  const dateObj = new Date(`${date}T00:00:00`);
-
-  for (let hour = OPEN_HOUR; hour < CLOSE_HOUR; hour++) {
-    const slotStart = new Date(dateObj);
-    slotStart.setHours(hour, 0, 0, 0);
-    const slotEnd = new Date(slotStart.getTime() + SLOT_MINUTES * 60 * 1000);
-
-    const isBusy = busyPeriods.some(busy => {
-      const busyStart = new Date(busy.start);
-      const busyEnd = new Date(busy.end);
-      return slotStart < busyEnd && slotEnd > busyStart;
+    const bloqueado = periodosBloqueados.some(b => {
+      const bIni = new Date(b.start);
+      const bFin = new Date(b.end);
+      return iniDt < bFin && finDt > bIni;
     });
 
-    slots.push({
-      start: slotStart.toISOString(),
-      end: slotEnd.toISOString(),
-      available: !isBusy,
-      duration_minutes: SLOT_MINUTES,
-    });
+    slots.push({ inicio: ini, fin, disponible: !bloqueado });
   }
 
   return slots;
 }
 
-export async function getCourtAvailability(
-  courtId: string,
-  date: string,
-  complexId: string,
-  timezone: string = 'Europe/Madrid'
-): Promise<AvailabilitySlot[]> {
-  // 1. Check cache
-  const cached = await getCachedSlots(courtId, date);
-  if (cached) {
-    logger.debug(`Availability cache hit: court=${courtId} date=${date}`);
-    return cached;
-  }
-
-  // 2. Fetch from Google Calendar
-  const calRecord = await getCourtCalendar(courtId);
-  if (!calRecord) {
-    // No calendar linked — return slots based on DB reservations only
-    return getSlotsFromDb(courtId, date, complexId, timezone);
-  }
-
-  const calClient = await getCalendarClient(courtId);
-  if (!calClient) {
-    return getSlotsFromDb(courtId, date, complexId, timezone);
-  }
+// Consulta freebusy con OAuth2 (requiere refresh token — permite escritura también)
+async function consultarConOAuth(fecha: string, calId: string): Promise<SlotDisponible[] | null> {
+  const cal = await getCalendarClient();
+  if (!cal) return null;
 
   try {
-    const dayStart = new Date(`${date}T00:00:00`);
-    const dayEnd   = new Date(`${date}T23:59:59`);
+    const diaInicio = new Date(`${fecha}T00:00:00`);
+    const diaFin    = new Date(`${fecha}T23:59:59`);
 
-    const response = await calClient.freebusy.query({
+    const resp = await cal.freebusy.query({
       requestBody: {
-        timeMin: dayStart.toISOString(),
-        timeMax: dayEnd.toISOString(),
-        timeZone: timezone,
-        items: [{ id: calRecord.google_calendar_id }],
+        timeMin: diaInicio.toISOString(),
+        timeMax: diaFin.toISOString(),
+        timeZone: TZ,
+        items: [{ id: calId }],
       },
     });
 
-    const busyPeriods = response.data.calendars?.[calRecord.google_calendar_id]?.busy ?? [];
-    const mappedBusy = busyPeriods.map(b => ({
-      start: b.start ?? '',
-      end: b.end ?? '',
-    }));
-
-    const slots = generateSlots(date, mappedBusy, timezone);
-    await cacheSlots(complexId, courtId, date, slots);
-    return slots;
+    const ocupados = resp.data.calendars?.[calId]?.busy ?? [];
+    return generarSlots(fecha, ocupados.map(b => ({ start: b.start ?? '', end: b.end ?? '' })));
   } catch (err) {
-    logger.error('Google Calendar freebusy query failed', { courtId, date, err });
-    return getSlotsFromDb(courtId, date, complexId, timezone);
+    logger.warn('OAuth freebusy falló', { err });
+    return null;
   }
 }
 
-// Fallback: derive availability from DB reservations
-async function getSlotsFromDb(
-  courtId: string,
-  date: string,
-  complexId: string,
-  timezone: string
-): Promise<AvailabilitySlot[]> {
-  const { data: reservations } = await db.client
-    .from('reservations')
-    .select('starts_at, ends_at')
-    .eq('court_id', courtId)
-    .eq('status', 'confirmed')
-    .gte('starts_at', `${date}T00:00:00`)
-    .lte('ends_at', `${date}T23:59:59`);
+// Consulta freebusy con API Key (solo lectura — funciona si el calendario es público)
+async function consultarConApiKey(fecha: string, calId: string): Promise<SlotDisponible[] | null> {
+  if (!config.GOOGLE_API_KEY) return null;
 
-  const busy = (reservations ?? []).map(r => ({ start: r.starts_at, end: r.ends_at }));
-  const slots = generateSlots(date, busy, timezone);
-  await cacheSlots(complexId, courtId, date, slots);
-  return slots;
+  try {
+    const cal = google.calendar({ version: 'v3', auth: config.GOOGLE_API_KEY });
+    const diaInicio = new Date(`${fecha}T00:00:00`);
+    const diaFin    = new Date(`${fecha}T23:59:59`);
+
+    const resp = await cal.freebusy.query({
+      key: config.GOOGLE_API_KEY,
+      requestBody: {
+        timeMin: diaInicio.toISOString(),
+        timeMax: diaFin.toISOString(),
+        timeZone: TZ,
+        items: [{ id: calId }],
+      },
+    });
+
+    const ocupados = resp.data.calendars?.[calId]?.busy ?? [];
+    return generarSlots(fecha, ocupados.map(b => ({ start: b.start ?? '', end: b.end ?? '' })));
+  } catch (err) {
+    logger.warn('API Key freebusy falló (calendario puede ser privado)', { err });
+    return null;
+  }
 }
 
-export async function getMultiCourtAvailability(
-  courts: Array<{ id: string; name: string; sport: string }>,
-  date: string,
-  complexId: string,
-  timezone: string
-): Promise<CourtAvailability[]> {
-  const results = await Promise.all(
-    courts.map(async court => {
-      const slots = await getCourtAvailability(court.id, date, complexId, timezone);
-      return {
-        court_id: court.id,
-        court_name: court.name,
-        sport: court.sport as any,
-        date,
-        slots,
-      };
-    })
-  );
-  return results;
+export async function consultarDisponibilidad(fecha: string): Promise<SlotDisponible[]> {
+  const calId = getCalendarId();
+
+  if (!calId) {
+    logger.warn('GOOGLE_CALENDAR_ID no configurado – retornando todos los slots libres');
+    return generarSlots(fecha, []);
+  }
+
+  // Intento 1: OAuth2 (necesario para calendarios privados y para crear eventos)
+  const conOAuth = await consultarConOAuth(fecha, calId);
+  if (conOAuth) return conOAuth;
+
+  // Intento 2: API Key (solo funciona si el calendario está configurado como público)
+  const conApiKey = await consultarConApiKey(fecha, calId);
+  if (conApiKey) return conApiKey;
+
+  // Fallback: todos los slots libres (Calendar no disponible)
+  logger.warn('Google Calendar no disponible – mostrando todos los slots como libres');
+  return generarSlots(fecha, []);
 }

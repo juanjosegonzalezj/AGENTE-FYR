@@ -29,6 +29,20 @@ const configSchema = z.object({
   // App
   APP_URL: z.string().url().default('http://localhost:3001'),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+
+  // FYR – Google Calendar (cancha única)
+  GOOGLE_API_KEY: z.string().default(''),
+  GOOGLE_CALENDAR_ID: z.string().default(''),
+  GOOGLE_REFRESH_TOKEN: z.string().default(''),
+
+  // FYR – Datos del complejo aliado
+  COMPLEX_NOMBRE: z.string().default('Find Your Rival'),
+  COMPLEX_CIUDAD: z.string().default('Pereira, Colombia'),
+  COMPLEX_WHATSAPP: z.string().default(''),
+  COMPLEX_CANCHA_FUTBOL: z.string().default('Cancha Fútbol'),
+  COMPLEX_CANCHA_PADEL: z.string().default('Pista Pádel'),
+  COMPLEX_VALOR_FUTBOL: z.string().default('80000'),   // COP por partido
+  COMPLEX_VALOR_PADEL: z.string().default('60000'),    // COP por partido
 });
 
 // In development, every sensitive key is optional — server boots with warnings
@@ -46,6 +60,16 @@ const devSchema = z.object({
   ENCRYPTION_KEY: z.string().optional().default('00000000000000000000000000000000'),
   APP_URL: z.string().default('http://localhost:3001'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
+  GOOGLE_API_KEY: z.string().optional().default(''),
+  GOOGLE_CALENDAR_ID: z.string().optional().default(''),
+  GOOGLE_REFRESH_TOKEN: z.string().optional().default(''),
+  COMPLEX_NOMBRE: z.string().optional().default('Find Your Rival'),
+  COMPLEX_CIUDAD: z.string().optional().default('Pereira, Colombia'),
+  COMPLEX_WHATSAPP: z.string().optional().default(''),
+  COMPLEX_CANCHA_FUTBOL: z.string().optional().default('Cancha Fútbol'),
+  COMPLEX_CANCHA_PADEL: z.string().optional().default('Pista Pádel'),
+  COMPLEX_VALOR_FUTBOL: z.string().optional().default('80000'),
+  COMPLEX_VALOR_PADEL: z.string().optional().default('60000'),
 });
 
 function loadConfig() {
@@ -69,7 +93,7 @@ function loadConfig() {
       ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID?.includes('.apps.googleusercontent.com')
       ? process.env.GOOGLE_CLIENT_ID : undefined,
-    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY?.length >= 32
+    ENCRYPTION_KEY: (process.env.ENCRYPTION_KEY?.length ?? 0) >= 32
       ? process.env.ENCRYPTION_KEY : undefined,
   });
 

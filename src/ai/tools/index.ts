@@ -1,203 +1,123 @@
 import type Anthropic from '@anthropic-ai/sdk';
 
-// Anthropic tool definitions — what Claude sees
 export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
-    name: 'get_available_courts',
+    name: 'registrar_solicitud',
     description:
-      'Returns real-time court availability from Google Calendar for a given sport and date. ' +
-      'ALWAYS call this before suggesting any time slot or confirming availability. Never invent availability.',
+      'Registra una nueva solicitud de matchmaking en la base de datos. ' +
+      'Llama esta herramienta después de recopilar nombre, teléfono, deporte, nivel y horario del usuario.',
     input_schema: {
       type: 'object',
       properties: {
-        date: {
-          type: 'string',
-          description: 'Date to check availability in YYYY-MM-DD format. Today if not specified.',
-        },
-        sport: {
-          type: 'string',
-          enum: ['padel', 'tennis', 'soccer', 'basketball', 'volleyball'],
-          description: 'Sport type to filter courts.',
-        },
-        time_start: {
-          type: 'string',
-          description: 'Preferred start time in HH:MM format (optional).',
-        },
-        time_end: {
-          type: 'string',
-          description: 'Preferred end time in HH:MM format (optional).',
-        },
-        duration_minutes: {
-          type: 'number',
-          description: 'Desired reservation duration in minutes (default: 60).',
-        },
+        nombre:          { type: 'string', description: 'Nombre y apellido del jugador.' },
+        telefono:        { type: 'string', description: 'Número de teléfono del jugador (sin código país si ya lo tienes).' },
+        deporte:         { type: 'string', enum: ['fútbol', 'pádel'], description: 'Deporte.' },
+        nivel:           { type: 'string', description: 'Nivel: Bajo/Intermedio/Alto para fútbol. 1ra/2da/3ra/4ta/5ta para pádel.' },
+        horario_deseado: { type: 'string', description: 'Franja horaria preferida (ej: "6am-9am", "6pm-9pm").' },
+        observaciones:   { type: 'string', description: 'Notas adicionales opcionales.' },
       },
-      required: ['date'],
+      required: ['nombre', 'telefono', 'deporte', 'nivel'],
     },
   },
   {
-    name: 'create_booking',
+    name: 'buscar_rival',
     description:
-      'Creates a confirmed court reservation in the database AND in Google Calendar. ' +
-      'Only call this AFTER the user has explicitly confirmed the booking details.',
+      'Busca un rival compatible usando las reglas de matchmaking de FYR. ' +
+      'Prioridad: Capitanes FYR → Clientes complejo → Solicitudes pendientes. ' +
+      'SIEMPRE usa esta herramienta para buscar rivales, nunca inventes.',
     input_schema: {
       type: 'object',
       properties: {
-        court_id: {
-          type: 'string',
-          description: 'UUID of the court to book.',
-        },
-        sport: {
-          type: 'string',
-          enum: ['padel', 'tennis', 'soccer', 'basketball', 'volleyball'],
-        },
-        starts_at: {
-          type: 'string',
-          description: 'Reservation start time in ISO 8601 format.',
-        },
-        ends_at: {
-          type: 'string',
-          description: 'Reservation end time in ISO 8601 format.',
-        },
-        player_name: {
-          type: 'string',
-          description: 'Name of the player making the booking.',
-        },
-        notes: {
-          type: 'string',
-          description: 'Optional notes for the reservation.',
-        },
+        deporte:              { type: 'string', enum: ['fútbol', 'pádel'] },
+        nivel_futbol:         { type: 'string', enum: ['Bajo', 'Intermedio', 'Alto'], description: 'Solo si deporte es fútbol.' },
+        nivel_padel:          { type: 'string', enum: ['1ra', '2da', '3ra', '4ta', '5ta'], description: 'Solo si deporte es pádel.' },
+        franja_horaria:       { type: 'string', description: 'Franja horaria preferida (ej: "6am-9am").' },
+        telefono_solicitante: { type: 'string', description: 'Teléfono del usuario que busca rival (para excluirlo de resultados).' },
       },
-      required: ['court_id', 'sport', 'starts_at', 'ends_at'],
+      required: ['deporte', 'telefono_solicitante'],
     },
   },
   {
-    name: 'cancel_booking',
-    description: 'Cancels an existing reservation and removes the Google Calendar event.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        reservation_id: {
-          type: 'string',
-          description: 'UUID of the reservation to cancel.',
-        },
-        reason: {
-          type: 'string',
-          description: 'Reason for cancellation (optional).',
-        },
-      },
-      required: ['reservation_id'],
-    },
-  },
-  {
-    name: 'reschedule_booking',
+    name: 'consultar_disponibilidad',
     description:
-      'Moves an existing reservation to a new time slot. ' +
-      'Always verify the new slot is available first with get_available_courts.',
+      'Consulta los horarios disponibles en Google Calendar para una fecha específica. ' +
+      'SIEMPRE llama esta herramienta antes de proponer horarios. Nunca inventes disponibilidad.',
     input_schema: {
       type: 'object',
       properties: {
-        reservation_id: {
-          type: 'string',
-          description: 'UUID of the reservation to reschedule.',
-        },
-        new_starts_at: {
-          type: 'string',
-          description: 'New start time in ISO 8601 format.',
-        },
-        new_ends_at: {
-          type: 'string',
-          description: 'New end time in ISO 8601 format.',
-        },
+        fecha: { type: 'string', description: 'Fecha en formato YYYY-MM-DD.' },
       },
-      required: ['reservation_id', 'new_starts_at', 'new_ends_at'],
+      required: ['fecha'],
     },
   },
   {
-    name: 'find_opponents',
+    name: 'crear_reserva',
     description:
-      'Finds compatible players for a match using the matchmaking algorithm. ' +
-      'Returns ranked candidates with compatibility percentages.',
+      'Crea una reserva de cancha después de que AMBOS jugadores hayan confirmado y el horario esté disponible. ' +
+      'Crea también el evento en Google Calendar.',
     input_schema: {
       type: 'object',
       properties: {
-        sport: {
-          type: 'string',
-          enum: ['padel', 'tennis', 'soccer', 'basketball', 'volleyball'],
-        },
-        preferred_date: {
-          type: 'string',
-          description: 'Preferred match date in YYYY-MM-DD format.',
-        },
-        time_start: {
-          type: 'string',
-          description: 'Preferred start time HH:MM.',
-        },
-        time_end: {
-          type: 'string',
-          description: 'Preferred end time HH:MM.',
-        },
-        skill_min: {
-          type: 'number',
-          description: 'Minimum skill score (0-1000). Optional.',
-        },
-        skill_max: {
-          type: 'number',
-          description: 'Maximum skill score (0-1000). Optional.',
-        },
-        gender_pref: {
-          type: 'string',
-          enum: ['male', 'female', 'non_binary', 'any'],
-          description: 'Gender preference for opponent.',
-        },
-        age_min: {
-          type: 'number',
-          description: 'Minimum opponent age (optional).',
-        },
-        age_max: {
-          type: 'number',
-          description: 'Maximum opponent age (optional).',
-        },
+        capitan_1:       { type: 'string', description: 'Nombre del capitán 1 (quien solicita).' },
+        capitan_2:       { type: 'string', description: 'Nombre del capitán 2 (el rival).' },
+        telefono_1:      { type: 'string', description: 'Teléfono capitán 1.' },
+        telefono_2:      { type: 'string', description: 'Teléfono capitán 2.' },
+        deporte:         { type: 'string', enum: ['fútbol', 'pádel'] },
+        fecha:           { type: 'string', description: 'Fecha del partido YYYY-MM-DD.' },
+        hora_inicio:     { type: 'string', description: 'Hora de inicio HH:MM.' },
+        hora_fin:        { type: 'string', description: 'Hora de fin HH:MM.' },
+        solicitud_1_id:  { type: 'number', description: 'ID de la solicitud del capitán 1 (si existe).' },
+        solicitud_2_id:  { type: 'number', description: 'ID de la solicitud del capitán 2 (si existe).' },
       },
-      required: ['sport', 'preferred_date', 'time_start', 'time_end'],
+      required: ['capitan_1', 'capitan_2', 'telefono_1', 'telefono_2', 'deporte', 'fecha', 'hora_inicio', 'hora_fin'],
     },
   },
   {
-    name: 'get_player_profile',
-    description: 'Returns a player\'s profile, stats, and skill information.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        player_id: {
-          type: 'string',
-          description: 'UUID of the player.',
-        },
-      },
-      required: ['player_id'],
-    },
-  },
-  {
-    name: 'get_complex_information',
+    name: 'confirmar_pago',
     description:
-      'Returns sports complex information: available sports, courts, pricing, contact details, and schedule.',
-    input_schema: {
-      type: 'object',
-      properties: {},
-      required: [],
-    },
-  },
-  {
-    name: 'get_reservation_details',
-    description: 'Returns full details of a specific reservation by its ID.',
+      'Confirma el pago de una reserva. Llama esta herramienta cuando el usuario diga que ya pagó o envíe comprobante. ' +
+      'Cambia estado_pago a confirmado y estado_reserva a reservada.',
     input_schema: {
       type: 'object',
       properties: {
-        reservation_id: {
-          type: 'string',
-          description: 'UUID of the reservation.',
-        },
+        reserva_id:       { type: 'number', description: 'ID de la reserva a confirmar.' },
+        telefono_usuario:  { type: 'string', description: 'Teléfono del usuario (para buscar la reserva si no tienes el ID).' },
       },
-      required: ['reservation_id'],
+      required: ['telefono_usuario'],
+    },
+  },
+  {
+    name: 'obtener_reserva',
+    description: 'Obtiene los detalles de la reserva activa de un usuario por su teléfono.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        telefono: { type: 'string', description: 'Teléfono del usuario.' },
+      },
+      required: ['telefono'],
+    },
+  },
+  {
+    name: 'cancelar_reserva',
+    description: 'Cancela una reserva existente y elimina el evento de Google Calendar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        reserva_id:       { type: 'number', description: 'ID de la reserva.' },
+        telefono_usuario: { type: 'string', description: 'Teléfono (para buscar si no tienes el ID).' },
+      },
+      required: ['telefono_usuario'],
+    },
+  },
+  {
+    name: 'obtener_solicitud',
+    description: 'Obtiene la solicitud activa de un usuario por su teléfono.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        telefono: { type: 'string', description: 'Teléfono del usuario.' },
+      },
+      required: ['telefono'],
     },
   },
 ];

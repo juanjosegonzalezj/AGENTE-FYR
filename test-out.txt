@@ -1,0 +1,71 @@
+17:38:53 [[32minfo[39m] [32m🚀 Lucía API corriendo en http://localhost:3001[39m
+17:38:53 [[32minfo[39m] [32m   Health:  GET  /health[39m
+17:38:53 [[32minfo[39m] [32m   Chat:    POST /api/chat[39m
+17:38:53 [[32minfo[39m] [32m📱 WhatsApp inicializando...[39m
+17:38:53 [[32minfo[39m] [32mJob recordatorios iniciado (cada 1 minuto)[39m
+17:38:53 [[32minfo[39m] [32mJobs matchmaking iniciados (matchmaker: 5min, sin rival: 15min)[39m
+17:38:53 [[32minfo[39m] [32m⏱️  Jobs de recordatorios y matchmaking activos[39m
+17:39:14 [[32minfo[39m] [32mWhatsApp QR code generated — scan to connect[39m
+
+
+============================================================
+  📱  ESCANEA ESTE QR CON WHATSAPP
+============================================================
+[47m[30m ▄▄▄▄▄▄▄  ▄▄▄   ▄▄▄ ▄▄▄▄▄▄▄▄  ▄  ▄ ▄ ▄ ▄   ▄ ▄ ▄▄   ▄▄ ▄▄▄▄▄▄▄ [0m
+[47m[30m █ ▄▄▄ █ █ ▄▄█▄██▀▀▀▄▀▄▀▄  ▄ ██▄▄  ▀▀ ██▀ ▄▀▀▀▄▄ █ ▄██ █ ▄▄▄ █ [0m
+[47m[30m █ ███ █ ▀▄▄▀▄▄▄ ▀ █ █ ▄▀ ▄█ ▄▄█▄██▀▀█▄▀██▄▄▀█▀▀██▀█▄▀ █ ███ █ [0m
+[47m[30m █▄▄▄▄▄█ ▄▀▄ ▄▀█▀█ ▄ ▄▀█▀▄ ▄ █ ▄ █▀█▀█ █ ▄▀▄ ▄▀▄▀█ █ ▄ █▄▄▄▄▄█ [0m
+[47m[30m ▄     ▄ █ ▀ ▄█▄ ▄█▀▄ █▄▄  ▀██▄▄▄█  ▄█ ▀▀▀▀▄▀▀▀ ▄██  ▄▄▄  ▄▄▄  [0m
+[47m[30m █▄█▀▀▄▄█▄█▀▄▀▄█ █▀▄ █▀▀▄█▀ ▄   █▀▀▀▄▀▄█ ▀▀█▄█▀▀ ▀▄█▀▀▀▀  ▄▄▀▄ [0m
+[47m[30m ▀ ▀▀▀ ▄▀▄▀ ▀▀▄▄  ▀█▀▄█▄█▄▀█▀ ▀█▀▄█▄▀█  ▀██▀ █▀▄▀▄  ▄█▀█ █▀▄▀  [0m
+[47m[30m ▀▀█ ▀▀▄ ▄▀▄▄▀█ █▄▄▄█▄▄██ ▄ █▄▄█▄ █ ▄▄▀ █▀▀▀▀ ▀  ▀▄▄▀▄▄▀ ▄▀███ [0m
+[47m[30m ▄  ▄▀█▄█  ▄  ▀▄▀█▀███▄ ██▄ ▀▀▀█ ▄█▀▄█▀█  █▀▄▀▄ ███▀▄▀▀ ▄  █ █ [0m
+[47m[30m ██▀██ ▄▄██▄█▀▄ ▄▄███ ▄▄▀█▄█ ▄▀█▀▄█▄▀▀█ ▄▄ ▀▄▀▀ ▀██ ▀ ▀▀▀▄▄ █▄ [0m
+[47m[30m █  ▀ █▄▄ ▀█ █▄▀█ ▄ ▀█▀█▀█▀ ▀ ▄▀▀▄█ ▄▄ ▄█▀█▀▄  ▀▀▄▀▄▀▄█ ▄▀█ █  [0m
+[47m[30m ▄ █  ▄▄▄▀█▀▄███ ▀   ▀    ▀▀▀▀▀   ██▀▄▄█ ▄▀▀ ███▄▄██▄███▀▀ ▀▄▄ [0m
+[47m[30m  █▀ ▄█▄▄▀█▀▄▄ █▄█ █▄▀█▄ █▀▄ ▄█▄██▀█ ███▀▄▄█▀▄ █ █▄▀▀ ▀ ▀▄█ ▀█ [0m
+[47m[30m ▄█▀ ▄█▄ █ ▀    ▀ ▀  ▀▀ ▄█ ▄  ▀▀▄▄▄▄██▄▄▀▀▀█  ▄▄▀▄▀▄█ ▀▀ ▄▀▀█▄ [0m
+[47m[30m ▄██▀▄▄▄▄▄▀██▄▄▀▀▀ ▄███▀▄██▀████▄▄▄▄▄▄▀▀▀ ▄ ▄ ▄███▀█ ██▄▄█▄█▄▄ [0m
+[47m[30m █▀█▀█ ▄ █▄▀▄▀ ▄▀ █▀ ▄▀▀▀█▀▀██ ▄ █▀▄  █ ▀▀▀▀▀██ ▀ ▀▄ █ ▄ █▄█ ▄ [0m
+[47m[30m █▀▀▀█▄▄▄██▄█▄▀▀ ▄▀▀█▀█▀  ▀ ▀█▄▄▄███▄▄▄ ▀ ▄▄▄ ▄ ▀▄ ▀ █▄▄▄█▀▄██ [0m
+[47m[30m ▀██ ▄▄▄▀  █▀▄█▀█▄▀▄▀█▀█▀▀▀ █▀▀ █ ██▀▄▀█▀█▀█▄▀▀█ ▀▄█ █▄▄█▀▀█▀▄ [0m
+[47m[30m ▄ █▄▀▄▄▀█ ▀▀█▀▀ ▀▀▀▀▀▄▀▀▀▀▄█  ▄▀  ▄ ███▀▄▀▀ █▄▀█▄▀ ▄▀ ▄███▄ █ [0m
+[47m[30m  █▀▄ ▀▄ ▀▄ ▀ ▄▀█▀█▀  ▀▄ ▀▄▄█ ▀▀▀▄ ▄▀▀▀ ██▀████  ▀▀▄█▀▄█▀▄▄ ▄  [0m
+[47m[30m ▀  ▄  ▄███ ▄▄▀ ▄▀▄▀▀▀ ▄▀█▄▄ █▄▄▀▀▄▄█▄▄  ▀ ▀█ ▄█▄▄ ▄█   ▄█▀█ █ [0m
+[47m[30m ▄ ▀   ▄█  ▄█▄▀▀▀█▄ ▀ ▄▀█  ▄██  █▀  ▄██▄█▀▀▀▀██  ▄█ ██ ▄ ▄█ ▀▄ [0m
+[47m[30m ▀▀ █▀▄▄▀▀▀██ ▀ █▀ ▀▄▄▄▄▀ ▄   ▀██▄█▀█▄ ▄ ▀▀▄█▀▀██▄█ ▄█ ▀ █ ▄ █ [0m
+[47m[30m  ▄▀ ▀ ▄█ █▀ █▀▄▀▀ ▀▀ █▀▀▀▄    ▄▄  █▀▄▄█▀▄▀▀ ▄ █▄ ▀█ ▄▄▄▀██ ▄▄ [0m
+[47m[30m ▄█ █▄▄▄█ ▀ ▄ █▀▀▄  ▀▄█ ▄▄▀█▀▀███▄ ▄ ▄▀▄ ▄▄ ▀▄▄▀ ▄█ ██ ▀█▀█  ▄ [0m
+[47m[30m ▀▀████▄█ █▀ ██▀▄  ▀ ▀██▀█▄▄▄▀▀█ ▀█  ▀▀   ▀▀ █ ▄▄ ▀▄▀ █▄█   █▄ [0m
+[47m[30m ███▄▀ ▄ ▄  ███ ▄▀▄  ▄▀▄▀ ▀▀ ▄▄█▄█▀▀▄█▄▀    ▄ ▄▀██  █▄▄█████▀█ [0m
+[47m[30m ▄▄▄▄▄▄▄ ▀▀▄  ▄▄▀▄ ▀▄██▀▀▀▄███ ▄ ██▄█▀  █▀██▀▄▀ ▀▄█▄██ ▄ █ ▄█▄ [0m
+[47m[30m █ ▄▄▄ █  █ █ ▄██▀ ▀▀█▄██▀█ ██▄▄▄█  ▄▄ ▀▄▀▀█▄   ▀▄▀▀▄█▄▄▄█▀ ▀▀ [0m
+[47m[30m █ ███ █   ▄█▀▄█ ▀█▄ ▀▄▄▄▀▀▀█▄▄▀▀▀█▀ ▀█▀▄ ▀██▀▀▀█▄▀█▀ █▄▄ ▄█ █ [0m
+[47m[30m █▄▄▄▄▄█ ▄ ▀▀█  ▄▀  █  ▄▀▄█▄██▀▀▀█▀ ▀▄ ▄ ██▀██▄██▄ ▀▄█▀▀▀██▄ █ [0m
+[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m[37m▀[47m[30m[0m
+[47m[30m[0m
+============================================================
+  WhatsApp → ⋮ → Dispositivos vinculados → Vincular
+============================================================
+
+17:39:53 [[34mdebug[39m] [34mSupabase service client initialised[39m
+21:58:02 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+21:58:04 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+21:58:12 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:03:03 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:08:01 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:13:18 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:17:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:22:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:27:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:32:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:37:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:42:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:47:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:52:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+22:57:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+23:02:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+23:07:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+23:12:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+23:17:58 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}
+23:22:59 [[31merror[39m] [31mError en job matchmaker[39m {"err":"Error obteniendo solicitudes pendientes: column Solicitudes.busqueda_activa does not exist"}

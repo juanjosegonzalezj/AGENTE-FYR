@@ -1,136 +1,195 @@
-import { searchPlayersForMatchmaking } from '../../db/queries/players.js';
-import type { Sport, MatchmakingCandidate, Player, Gender } from '../../types/index.js';
+import type { NivelFutbol, NivelPadel, DeporteTipo, CandidatoMatchmaking, Capitan, Solicitud } from '../../types/index.js';
+import { buscarCapitanesCompatibles } from '../../db/queries/capitanes.js';
+import { buscarClientesCompatibles } from '../../db/queries/clientes.js';
+import { buscarSolicitudesPendientesCompatibles } from '../../db/queries/solicitudes.js';
 import logger from '../../utils/logger.js';
 
-export interface FindOpponentsInput {
-  sport: Sport;
-  preferred_date: string;
-  time_start: string;
-  time_end: string;
-  skill_min?: number;
-  skill_max?: number;
-  gender_pref?: Gender;
-  age_min?: number;
-  age_max?: number;
+// ── Reglas de compatibilidad ──────────────────────────────────────────────────
+
+const NIVELES_FUTBOL: NivelFutbol[] = ['Bajo', 'Intermedio', 'Alto'];
+
+function futbolCompatible(a: NivelFutbol, b: NivelFutbol): boolean {
+  const ia = NIVELES_FUTBOL.indexOf(a);
+  const ib = NIVELES_FUTBOL.indexOf(b);
+  return Math.abs(ia - ib) <= 1; // Máximo 1 nivel de diferencia
 }
 
-// Calculates a 0-100 compatibility score between two players
-function calculateCompatibility(requester: Player, candidate: Player): number {
-  let score = 0;
-  const reasons: string[] = [];
+const NIVELES_PADEL: NivelPadel[] = ['1ra', '2da', '3ra', '4ta', '5ta'];
 
-  // 1. Skill proximity (0–50 pts)
-  const skillDiff = Math.abs(requester.skill_score - candidate.skill_score);
-  const skillScore = Math.max(0, 50 - skillDiff / 10);
-  score += skillScore;
-  if (skillDiff < 50) reasons.push('Nivel de habilidad muy similar');
-  else if (skillDiff < 150) reasons.push('Nivel de habilidad compatible');
+function padelCompatible(a: NivelPadel, b: NivelPadel): boolean {
+  const ia = NIVELES_PADEL.indexOf(a);
+  const ib = NIVELES_PADEL.indexOf(b);
+  return Math.abs(ia - ib) <= 1; // Máximo 1 categoría de diferencia
+}
 
-  // 2. Activity (0–20 pts): recently active players ranked higher
-  const matchCount = candidate.stats?.matches ?? 0;
-  const activityScore = Math.min(20, matchCount * 2);
-  score += activityScore;
-  if (matchCount > 5) reasons.push('Jugador activo con experiencia');
+function franjaCompatible(
+  franjasRival: string[],
+  franjaDeseada?: string
+): boolean {
+  if (!franjaDeseada) return true;
+  return franjasRival?.includes(franjaDeseada) ?? false;
+}
 
-  // 3. Win balance (0–15 pts)
-  const reqWinRate = requester.stats.matches > 0
-    ? requester.stats.wins / requester.stats.matches : 0.5;
-  const canWinRate = candidate.stats.matches > 0
-    ? candidate.stats.wins / candidate.stats.matches : 0.5;
-  const winDiff = Math.abs(reqWinRate - canWinRate);
-  const winScore = Math.max(0, 15 - winDiff * 30);
-  score += winScore;
+// ── Conversor de Capitan/Cliente a CandidatoMatchmaking ───────────────────────
 
-  // 4. Age compatibility (0–15 pts) — optional
-  if (requester.age && candidate.age) {
-    const ageDiff = Math.abs(requester.age - candidate.age);
-    const ageScore = Math.max(0, 15 - ageDiff);
-    score += ageScore;
-    if (ageDiff < 5) reasons.push('Edad similar');
-  } else {
-    score += 7.5; // neutral when unknown
+function capitanToCandidato(
+  c: Capitan,
+  fuente: 'capitanes' | 'clientes',
+  deporte: DeporteTipo,
+  nivel_futbol?: NivelFutbol,
+  nivel_padel?: NivelPadel,
+  franja?: string
+): CandidatoMatchmaking | null {
+  let compatible = false;
+  let razon = '';
+
+  if (deporte === 'fútbol') {
+    if (!nivel_futbol) return null;
+    compatible = futbolCompatible(c.nivel_futbol, nivel_futbol);
+    razon = compatible
+      ? `Nivel fútbol compatible: ${c.nivel_futbol}`
+      : `Nivel incompatible: ${c.nivel_futbol} vs ${nivel_futbol}`;
+  } else if (deporte === 'pádel') {
+    if (!nivel_padel) return null;
+    compatible = padelCompatible(c.nivel_padel, nivel_padel);
+    razon = compatible
+      ? `Categoría pádel compatible: ${c.nivel_padel}`
+      : `Categoría incompatible: ${c.nivel_padel} vs ${nivel_padel}`;
   }
 
-  if (reasons.length === 0) reasons.push('Perfil compatible');
+  if (!compatible) return null;
+  if (franja && !franjaCompatible(c.franja_horaria, franja)) return null;
 
-  return Math.round(Math.min(100, score));
+  return {
+    nombre: c.nombre_capitan,
+    telefono: c.telefono ?? '',
+    fuente,
+    sport_type: c.sport_type,
+    nivel_futbol: c.nivel_futbol,
+    nivel_padel: c.nivel_padel,
+    franja_horaria: c.franja_horaria ?? [],
+    compatible: true,
+    razon,
+  };
 }
 
-export async function findOpponents(
-  complexId: string,
-  requesterId: string,
-  input: FindOpponentsInput
-): Promise<{
-  found: boolean;
-  opponents: MatchmakingCandidate[];
-  message: string;
+function solicitudToCandidato(
+  s: Solicitud,
+  deporte: DeporteTipo,
+  nivel_futbol?: NivelFutbol,
+  nivel_padel?: NivelPadel,
+  franja?: string
+): CandidatoMatchmaking | null {
+  let compatible = false;
+
+  if (deporte === 'fútbol' && nivel_futbol) {
+    compatible = futbolCompatible(s.nivel as NivelFutbol, nivel_futbol);
+  } else if (deporte === 'pádel' && nivel_padel) {
+    compatible = padelCompatible(s.nivel as NivelPadel, nivel_padel);
+  }
+
+  if (!compatible) return null;
+  if (franja && s.horario_deseado && s.horario_deseado !== franja) return null;
+
+  return {
+    nombre: s.nombre,
+    telefono: s.telefono,
+    fuente: 'solicitudes',
+    sport_type: deporte,
+    nivel_futbol: deporte === 'fútbol' ? s.nivel as NivelFutbol : undefined,
+    nivel_padel:  deporte === 'pádel'  ? s.nivel as NivelPadel  : undefined,
+    franja_horaria: s.horario_deseado ? [s.horario_deseado] : [],
+    compatible: true,
+    razon: `Solicitud pendiente – nivel ${s.nivel}`,
+  };
+}
+
+// ── Función principal ─────────────────────────────────────────────────────────
+
+export async function buscarRival(opts: {
+  deporte: DeporteTipo;
+  nivel_futbol?: NivelFutbol;
+  nivel_padel?: NivelPadel;
+  franja?: string;
+  telefono_solicitante: string;
+}): Promise<{
+  encontrado: boolean;
+  candidatos: CandidatoMatchmaking[];
+  mensaje: string;
 }> {
-  const {
-    sport, preferred_date, time_start, time_end,
-    skill_min, skill_max, gender_pref, age_min, age_max,
-  } = input;
+  const { deporte, nivel_futbol, nivel_padel, franja, telefono_solicitante } = opts;
 
-  // Get the requester's profile
-  const { getPlayerById } = await import('../../db/queries/players.js');
-  const requester = await getPlayerById(requesterId);
-  if (!requester) {
-    return { found: false, opponents: [], message: 'Perfil de jugador no encontrado.' };
-  }
+  logger.info('Buscando rival', { deporte, nivel_futbol, nivel_padel, franja });
 
-  // Determine skill range (±200 by default)
-  const effectiveSkillMin = skill_min ?? Math.max(0, requester.skill_score - 200);
-  const effectiveSkillMax = skill_max ?? Math.min(1000, requester.skill_score + 200);
-
-  const candidates = await searchPlayersForMatchmaking({
-    complexId,
-    sport,
-    skillMin: effectiveSkillMin,
-    skillMax: effectiveSkillMax,
-    isLooking: true,
-    excludeId: requesterId,
-    gender: gender_pref,
-    ageMin: age_min,
-    ageMax: age_max,
-    limit: 20,
+  // Prioridad 1: Capitanes FYR
+  const capitanes = await buscarCapitanesCompatibles({
+    deporte,
+    nivel_futbol,
+    nivel_padel,
+    franja,
+    excluir_telefono: telefono_solicitante,
   });
 
-  if (!candidates.length) {
+  const candidatosCapitanes: CandidatoMatchmaking[] = capitanes
+    .map(c => capitanToCandidato(c, 'capitanes', deporte, nivel_futbol, nivel_padel, franja))
+    .filter((c): c is CandidatoMatchmaking => c !== null);
+
+  if (candidatosCapitanes.length > 0) {
+    logger.info(`Rival encontrado en Capitanes: ${candidatosCapitanes[0].nombre}`);
     return {
-      found: false,
-      opponents: [],
-      message: `No se encontraron rivales disponibles para ${sport} en este momento. ¿Quieres que te avisemos cuando haya alguien disponible?`,
+      encontrado: true,
+      candidatos: candidatosCapitanes.slice(0, 3),
+      mensaje: `Encontré ${candidatosCapitanes.length} rival(es) en la base de capitanes FYR.`,
     };
   }
 
-  // Calculate compatibility scores and sort
-  const ranked: MatchmakingCandidate[] = candidates
-    .map(candidate => ({
-      player: candidate,
-      score: calculateCompatibility(requester, candidate),
-      reasons: [],
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5); // Return top 5
+  // Prioridad 2: Clientes del complejo
+  const clientes = await buscarClientesCompatibles({
+    deporte,
+    nivel_futbol,
+    nivel_padel,
+    franja,
+    excluir_telefono: telefono_solicitante,
+  });
 
-  logger.info(`findOpponents: found ${ranked.length} candidates`, { sport, complexId });
+  const candidatosClientes: CandidatoMatchmaking[] = clientes
+    .map(c => capitanToCandidato(c, 'clientes', deporte, nivel_futbol, nivel_padel, franja))
+    .filter((c): c is CandidatoMatchmaking => c !== null);
 
-  // Build human-readable result
-  const opponentSummaries = ranked.map((c, i) => ({
-    rank: i + 1,
-    player_id: c.player.id,
-    name: c.player.full_name,
-    sport: c.player.sport,
-    skill_level: c.player.skill_level,
-    skill_score: c.player.skill_score,
-    compatibility_pct: c.score,
-    stats: `${c.player.stats.wins}W / ${c.player.stats.losses}L`,
-  }));
+  if (candidatosClientes.length > 0) {
+    logger.info(`Rival encontrado en Clientes: ${candidatosClientes[0].nombre}`);
+    return {
+      encontrado: true,
+      candidatos: candidatosClientes.slice(0, 3),
+      mensaje: `Encontré ${candidatosClientes.length} rival(es) en la base de clientes del complejo.`,
+    };
+  }
 
+  // Prioridad 3: Solicitudes pendientes recientes
+  const solicitudes = await buscarSolicitudesPendientesCompatibles({
+    deporte,
+    nivel: deporte === 'fútbol' ? (nivel_futbol ?? '') : (nivel_padel ?? ''),
+    franja,
+    excluir_telefono: telefono_solicitante,
+  });
+
+  const candidatosSolicitudes: CandidatoMatchmaking[] = solicitudes
+    .map(s => solicitudToCandidato(s, deporte, nivel_futbol, nivel_padel, franja))
+    .filter((c): c is CandidatoMatchmaking => c !== null);
+
+  if (candidatosSolicitudes.length > 0) {
+    logger.info(`Rival encontrado en Solicitudes: ${candidatosSolicitudes[0].nombre}`);
+    return {
+      encontrado: true,
+      candidatos: candidatosSolicitudes.slice(0, 3),
+      mensaje: `Encontré ${candidatosSolicitudes.length} solicitud(es) pendiente(s) compatible(s).`,
+    };
+  }
+
+  logger.info('No se encontró rival compatible');
   return {
-    found: true,
-    opponents: ranked,
-    message: `Encontré ${ranked.length} rivales compatibles para ${sport} el ${preferred_date} entre ${time_start} y ${time_end}.`,
-    // @ts-ignore
-    opponent_list: opponentSummaries,
+    encontrado: false,
+    candidatos: [],
+    mensaje: 'No encontré rival disponible en este momento. Tu solicitud quedará en espera y te avisaré cuando aparezca alguien compatible.',
   };
 }

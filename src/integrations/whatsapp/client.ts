@@ -1,6 +1,7 @@
 import WhatsApp from 'whatsapp-web.js';
 const { Client, LocalAuth } = WhatsApp;
 import qrcode from 'qrcode';
+import fs from 'fs';
 import logger from '../../utils/logger.js';
 
 type WAMessage = WhatsApp.Message;
@@ -9,73 +10,89 @@ let waClient: WhatsApp.Client | null = null;
 let qrDataUrl: string | null = null;
 let isReady = false;
 
-export function getWhatsAppClient(): WhatsApp.Client | null {
-  return waClient;
-}
+export function getWhatsAppClient(): WhatsApp.Client | null { return waClient; }
+export function getQrDataUrl(): string | null { return qrDataUrl; }
+export function isWhatsAppReady(): boolean { return isReady; }
 
-export function getQrDataUrl(): string | null {
-  return qrDataUrl;
-}
-
-export function isWhatsAppReady(): boolean {
-  return isReady;
+// Detecta la ruta del navegador disponible en el sistema
+function detectarNavegador(): string | undefined {
+  const candidatos = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+  ];
+  for (const ruta of candidatos) {
+    if (fs.existsSync(ruta)) {
+      logger.info(`Navegador encontrado: ${ruta}`);
+      return ruta;
+    }
+  }
+  logger.warn('No se encontró Chrome ni Edge — usando Chromium bundled');
+  return undefined;
 }
 
 export function initWhatsApp(
   onMessage: (msg: WAMessage) => Promise<void>
 ): void {
+  const executablePath = detectarNavegador();
+
   waClient = new Client({
-    authStrategy: new LocalAuth({ dataPath: process.env.WHATSAPP_SESSION_PATH ?? './whatsapp-session' }),
+    authStrategy: new LocalAuth({
+      dataPath: process.env.WHATSAPP_SESSION_PATH ?? './whatsapp-session',
+    }),
     puppeteer: {
       headless: true,
-      // Use system Edge (Chromium) instead of bundled Puppeteer Chrome
-      executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      ...(executablePath ? { executablePath } : {}),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
         '--disable-gpu',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--no-first-run',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--metrics-recording-only',
+        '--safebrowsing-disable-auto-update',
+        '--password-store=basic',
+        '--use-mock-keychain',
       ],
     },
   });
 
   waClient.on('qr', async (qr: string) => {
-    logger.info('WhatsApp QR code generated — scan to connect');
+    logger.info('QR generado — escanea con WhatsApp');
 
-    // Print QR directly to terminal as ASCII art
     try {
       const qrText = await qrcode.toString(qr, { type: 'terminal', small: true });
-      console.log('\n\n' + '='.repeat(60));
+      console.log('\n' + '='.repeat(60));
       console.log('  📱  ESCANEA ESTE QR CON WHATSAPP');
       console.log('='.repeat(60));
       console.log(qrText);
-      console.log('='.repeat(60));
       console.log('  WhatsApp → ⋮ → Dispositivos vinculados → Vincular');
       console.log('='.repeat(60) + '\n');
     } catch {
-      console.log('\n[WhatsApp QR generado — abre http://localhost:3001/webhooks/whatsapp/qr en el navegador]\n');
+      logger.info('QR disponible en http://localhost:3001/whatsapp/qr');
     }
 
-    // Also save as data URL for the web endpoint
     try {
       qrDataUrl = await qrcode.toDataURL(qr);
     } catch {
-      logger.warn('Could not generate QR data URL');
+      logger.warn('No se pudo generar QR data URL');
     }
   });
 
   waClient.on('ready', () => {
     isReady = true;
-    qrDataUrl = null; // clear QR once authenticated
-    logger.info('✅ WhatsApp client is ready');
+    qrDataUrl = null;
+    logger.info('✅ WhatsApp listo y conectado');
   });
 
   waClient.on('disconnected', (reason: string) => {
     isReady = false;
-    logger.warn(`WhatsApp disconnected: ${reason}`);
+    logger.warn(`WhatsApp desconectado: ${reason}`);
   });
 
   waClient.on('auth_failure', (msg: string) => {
@@ -83,19 +100,18 @@ export function initWhatsApp(
   });
 
   waClient.on('message', async (msg: WhatsApp.Message) => {
-    // Skip group messages and status updates
     if ((msg as any).isGroupMsg || msg.from === 'status@broadcast') return;
-
-    logger.debug(`WhatsApp message from ${msg.from}: ${msg.body.slice(0, 100)}`);
-
     try {
       await onMessage(msg);
     } catch (err: any) {
-      logger.error('Error processing WhatsApp message', { err: err.message });
+      logger.error('Error procesando mensaje WhatsApp', { err: err?.message ?? String(err) });
     }
   });
 
-  waClient.initialize().catch(err => {
-    logger.error('WhatsApp initialization failed', { err: err.message });
+  waClient.initialize().catch((err: unknown) => {
+    const mensaje = err instanceof Error ? err.message : String(err);
+    const stack   = err instanceof Error ? err.stack : '';
+    logger.error(`WhatsApp initialization failed: ${mensaje}`);
+    if (stack) logger.error(stack);
   });
 }

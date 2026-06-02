@@ -2,221 +2,262 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import { buildSystemPrompt } from './prompts.js';
 import { TOOL_DEFINITIONS } from './tools/index.js';
-import { getAvailableCourts } from './tools/availability.js';
-import { createBooking, cancelBooking, rescheduleBooking, getReservationDetails } from './tools/booking.js';
-import { findOpponents } from './tools/matchmaking.js';
-import { getPlayerProfile } from './tools/players.js';
-import { getComplexInformation } from './tools/complex.js';
-import {
-  getOrCreateConversation,
-  appendMessages,
-} from '../db/queries/messages.js';
-import type { SportsComplex, Player, AnthropicMessage, MessageChannel } from '../types/index.js';
+import { buscarRival } from './tools/matchmaking.js';
+import { consultarDisponibilidad } from '../integrations/google-calendar/availability.js';
+import { crearEventoCalendario, eliminarEventoCalendario } from '../integrations/google-calendar/events.js';
+import { crearSolicitud, actualizarSolicitud, obtenerSolicitudPorTelefono } from '../db/queries/solicitudes.js';
+import { crearReserva, confirmarPago, obtenerReservaPorTelefono, obtenerReservaPorId, cancelarReserva, actualizarReserva } from '../db/queries/reservas.js';
+import { obtenerOCrearConversacion, agregarMensajes } from '../db/queries/conversaciones.js';
+import type { MensajeIA, DeporteTipo, NivelFutbol, NivelPadel } from '../types/index.js';
 import logger from '../utils/logger.js';
 
 const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
-const MODEL = 'claude-sonnet-4-6';
-const MAX_TOKENS = 1024;
-const MAX_TOOL_ROUNDS = 6; // safety limit
+const MODEL        = 'claude-sonnet-4-6';
+const MAX_TOKENS   = 1024;
+const MAX_ROUNDS   = 8;
 
-interface AgentContext {
-  complex: SportsComplex;
-  player: Player | null;
-  channel: MessageChannel;
-  channelUserId: string;
-}
+// ── Ejecutor de herramientas ──────────────────────────────────────────────────
 
-interface AgentResponse {
-  reply: string;
-  conversationId: string;
-  toolsUsed: string[];
-}
-
-// Execute a tool call and return the result as a string
-async function executeTool(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-  ctx: AgentContext
+async function ejecutarHerramienta(
+  nombre: string,
+  input: Record<string, unknown>
 ): Promise<string> {
-  const { complex, player } = ctx;
-
   try {
-    switch (toolName) {
-      case 'get_available_courts': {
-        const result = await getAvailableCourts(
-          complex.id,
-          complex.timezone,
-          toolInput as any
-        );
-        return JSON.stringify(result);
+    switch (nombre) {
+
+      case 'registrar_solicitud': {
+        const sol = await crearSolicitud({
+          nombre:          input.nombre as string,
+          telefono:        input.telefono as string,
+          deporte:         input.deporte as DeporteTipo,
+          nivel:           input.nivel as string,
+          horario_deseado: input.horario_deseado as string | undefined,
+          observaciones:   input.observaciones as string | undefined,
+        });
+        return JSON.stringify({
+          ok: true,
+          solicitud_id: sol.id,
+          mensaje: `Solicitud registrada correctamente (ID: ${sol.id}).`,
+        });
       }
 
-      case 'create_booking': {
-        const result = await createBooking(
-          complex.id,
-          player?.id ?? null,
-          {
-            ...toolInput,
-            player_name: toolInput.player_name as string ?? player?.full_name,
-          } as any
-        );
-        return JSON.stringify(result);
+      case 'buscar_rival': {
+        const resultado = await buscarRival({
+          deporte:              input.deporte as DeporteTipo,
+          nivel_futbol:         input.nivel_futbol as NivelFutbol | undefined,
+          nivel_padel:          input.nivel_padel  as NivelPadel  | undefined,
+          franja:               input.franja_horaria as string | undefined,
+          telefono_solicitante: input.telefono_solicitante as string,
+        });
+        return JSON.stringify(resultado);
       }
 
-      case 'cancel_booking': {
-        const result = await cancelBooking(complex.id, toolInput as any);
-        return JSON.stringify(result);
+      case 'consultar_disponibilidad': {
+        const slots = await consultarDisponibilidad(input.fecha as string);
+        const disponibles = slots.filter(s => s.disponible);
+        return JSON.stringify({
+          fecha:           input.fecha,
+          slots_libres:    disponibles.map(s => `${s.inicio} – ${s.fin}`),
+          total_disponibles: disponibles.length,
+        });
       }
 
-      case 'reschedule_booking': {
-        const result = await rescheduleBooking(complex.id, toolInput as any);
-        return JSON.stringify(result);
+      case 'crear_reserva': {
+        const deporte = input.deporte as DeporteTipo;
+        const cancha  = deporte === 'fútbol' ? config.COMPLEX_CANCHA_FUTBOL : config.COMPLEX_CANCHA_PADEL;
+        const valor   = deporte === 'fútbol'
+          ? Number(config.COMPLEX_VALOR_FUTBOL)
+          : Number(config.COMPLEX_VALOR_PADEL);
+
+        // Crear evento en Google Calendar
+        const fechaHoraInicio = `${input.fecha}T${input.hora_inicio}:00`;
+        const fechaHoraFin    = `${input.fecha}T${input.hora_fin}:00`;
+        const eventId = await crearEventoCalendario({
+          titulo:      `FYR – ${deporte} – ${input.capitan_1} vs ${input.capitan_2}`,
+          descripcion: `Partido organizado por Find Your Rival.\nCancha: ${cancha}`,
+          inicio:      fechaHoraInicio,
+          fin:         fechaHoraFin,
+          deporte,
+        });
+
+        const reserva = await crearReserva({
+          solicitud_1_id:          input.solicitud_1_id as number | undefined,
+          solicitud_2_id:          input.solicitud_2_id as number | undefined,
+          capitan_1:               input.capitan_1  as string,
+          capitan_2:               input.capitan_2  as string,
+          telefono_1:              input.telefono_1 as string,
+          telefono_2:              input.telefono_2 as string,
+          deporte,
+          cancha,
+          fecha:                   input.fecha       as string,
+          hora_inicio:             input.hora_inicio as string,
+          hora_fin:                input.hora_fin    as string,
+          valor_total:             valor,
+          google_calendar_event_id: eventId ?? undefined,
+        });
+
+        return JSON.stringify({
+          ok: true,
+          reserva_id:  reserva.id,
+          cancha,
+          fecha:       reserva.fecha,
+          hora_inicio: reserva.hora_inicio,
+          hora_fin:    reserva.hora_fin,
+          valor_total: valor,
+          estado_pago: 'pendiente_pago',
+          mensaje: `Reserva creada (ID: ${reserva.id}). Valor: $${valor.toLocaleString('es-CO')} COP. Pendiente de pago.`,
+        });
       }
 
-      case 'find_opponents': {
-        if (!player) {
-          return JSON.stringify({ found: false, message: 'Debes tener un perfil de jugador para buscar rivales.' });
+      case 'confirmar_pago': {
+        let reserva = input.reserva_id
+          ? await obtenerReservaPorId(input.reserva_id as number)
+          : await obtenerReservaPorTelefono(input.telefono_usuario as string);
+
+        if (!reserva) {
+          return JSON.stringify({ ok: false, mensaje: 'No encontré una reserva activa para este usuario.' });
         }
-        const result = await findOpponents(complex.id, player.id, toolInput as any);
-        return JSON.stringify(result);
+        if (reserva.estado_pago === 'confirmado') {
+          return JSON.stringify({ ok: false, mensaje: 'Esta reserva ya está pagada y confirmada.' });
+        }
+
+        const actualizada = await confirmarPago(reserva.id);
+        return JSON.stringify({
+          ok: true,
+          reserva_id:     actualizada.id,
+          estado_pago:    actualizada.estado_pago,
+          estado_reserva: actualizada.estado_reserva,
+          mensaje: `✅ Pago confirmado. Reserva #${actualizada.id} está CONFIRMADA. Partido el ${actualizada.fecha} de ${actualizada.hora_inicio} a ${actualizada.hora_fin} en ${actualizada.cancha}.`,
+        });
       }
 
-      case 'get_player_profile': {
-        const result = await getPlayerProfile(
-          toolInput.player_id as string,
-          complex.id
-        );
-        return JSON.stringify(result);
+      case 'obtener_reserva': {
+        const reserva = await obtenerReservaPorTelefono(input.telefono as string);
+        if (!reserva) {
+          return JSON.stringify({ encontrado: false, mensaje: 'No tienes una reserva activa.' });
+        }
+        return JSON.stringify({ encontrado: true, reserva });
       }
 
-      case 'get_complex_information': {
-        const result = await getComplexInformation(complex);
-        return JSON.stringify(result);
+      case 'cancelar_reserva': {
+        let reserva = input.reserva_id
+          ? await obtenerReservaPorId(input.reserva_id as number)
+          : await obtenerReservaPorTelefono(input.telefono_usuario as string);
+
+        if (!reserva) {
+          return JSON.stringify({ ok: false, mensaje: 'No encontré una reserva activa.' });
+        }
+
+        await cancelarReserva(reserva.id);
+
+        if (reserva.google_calendar_event_id) {
+          await eliminarEventoCalendario(reserva.google_calendar_event_id);
+        }
+
+        return JSON.stringify({
+          ok: true,
+          mensaje: `Reserva #${reserva.id} cancelada correctamente.`,
+        });
       }
 
-      case 'get_reservation_details': {
-        const result = await getReservationDetails(
-          toolInput.reservation_id as string,
-          complex.id
-        );
-        return JSON.stringify(result);
+      case 'obtener_solicitud': {
+        const sol = await obtenerSolicitudPorTelefono(input.telefono as string);
+        if (!sol) {
+          return JSON.stringify({ encontrado: false, mensaje: 'No tienes una solicitud activa.' });
+        }
+        return JSON.stringify({ encontrado: true, solicitud: sol });
       }
 
       default:
-        return JSON.stringify({ error: `Unknown tool: ${toolName}` });
+        return JSON.stringify({ error: `Herramienta desconocida: ${nombre}` });
     }
   } catch (err: any) {
-    logger.error(`Tool execution error: ${toolName}`, { err: err.message });
-    return JSON.stringify({ error: `Tool error: ${err.message}` });
+    logger.error(`Error ejecutando herramienta ${nombre}`, { err: err.message });
+    return JSON.stringify({ error: `Error interno: ${err.message}` });
   }
 }
 
+// ── Loop principal del agente ─────────────────────────────────────────────────
+
+export interface AgentResponse {
+  reply: string;
+  herramientas_usadas: string[];
+}
+
 export async function runAgent(
-  userMessage: string,
-  ctx: AgentContext,
-  existingConversationId?: string
+  mensajeUsuario: string,
+  telefono: string
 ): Promise<AgentResponse> {
-  const { complex, player, channel, channelUserId } = ctx;
+  // 1. Cargar historial de conversación
+  const conv = await obtenerOCrearConversacion(telefono);
+  const historial: MensajeIA[] = [...(conv.mensajes ?? [])];
+  const nuevoMensaje: MensajeIA = { role: 'user', content: mensajeUsuario };
+  historial.push(nuevoMensaje);
 
-  // 1. Load or create conversation
-  const conversation = existingConversationId
-    ? await (async () => {
-        const { getConversationById } = await import('../db/queries/messages.js');
-        return getConversationById(existingConversationId);
-      })()
-    : null;
+  // 2. System prompt de Lucía
+  const systemPrompt = buildSystemPrompt(telefono);
 
-  const conv = conversation ?? await getOrCreateConversation(
-    channel,
-    channelUserId,
-    complex.id,
-    player?.id
-  );
-
-  const conversationId = conv.id;
-
-  // 2. Build message history
-  const history: AnthropicMessage[] = [...(conv.messages ?? [])];
-  const newUserMessage: AnthropicMessage = { role: 'user', content: userMessage };
-  history.push(newUserMessage);
-
-  // 3. Build system prompt with context
-  const systemPrompt = buildSystemPrompt(complex, player, channel);
-
-  // 4. Agentic loop
-  const toolsUsed: string[] = [];
-  let currentMessages: Anthropic.MessageParam[] = history.map(m => ({
+  // 3. Loop agéntico
+  const herramientasUsadas: string[] = [];
+  let mensajesActuales: Anthropic.MessageParam[] = historial.map(m => ({
     role: m.role,
     content: typeof m.content === 'string' ? m.content : m.content as Anthropic.ContentBlockParam[],
   }));
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    logger.debug(`Agent round ${round + 1}`, { conversationId });
+  for (let ronda = 0; ronda < MAX_ROUNDS; ronda++) {
+    logger.debug(`Ronda ${ronda + 1}`, { telefono });
 
     const response = await anthropic.messages.create({
-      model: MODEL,
+      model:      MODEL,
       max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      tools: TOOL_DEFINITIONS,
-      messages: currentMessages,
+      system:     systemPrompt,
+      tools:      TOOL_DEFINITIONS,
+      messages:   mensajesActuales,
     });
 
-    logger.debug(`Stop reason: ${response.stop_reason}`);
-
     if (response.stop_reason === 'end_turn') {
-      // Final text response
       const textBlock = response.content.find(b => b.type === 'text');
-      const reply = textBlock && textBlock.type === 'text' ? textBlock.text : '¿Puedo ayudarte en algo más?';
+      const reply = textBlock?.type === 'text' ? textBlock.text : '¿En qué más puedo ayudarte?';
 
-      // Persist new messages (user + assistant)
-      await appendMessages(conversationId, [
-        newUserMessage,
-        { role: 'assistant', content: reply },
-      ]);
-
-      return { reply, conversationId, toolsUsed };
+      await agregarMensajes(telefono, [nuevoMensaje, { role: 'assistant', content: reply }]);
+      return { reply, herramientas_usadas: herramientasUsadas };
     }
 
     if (response.stop_reason === 'tool_use') {
-      // Process all tool calls in parallel
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      const toolBlocks = response.content.filter(b => b.type === 'tool_use');
+      const resultados: Anthropic.ToolResultBlockParam[] = [];
 
-      for (const block of toolUseBlocks) {
+      for (const block of toolBlocks) {
         if (block.type !== 'tool_use') continue;
-        toolsUsed.push(block.name);
-        logger.info(`Calling tool: ${block.name}`, { input: block.input });
+        herramientasUsadas.push(block.name);
+        logger.info(`Herramienta: ${block.name}`, { input: block.input });
 
-        const result = await executeTool(
+        const resultado = await ejecutarHerramienta(
           block.name,
-          block.input as Record<string, unknown>,
-          ctx
+          block.input as Record<string, unknown>
         );
 
-        toolResults.push({
-          type: 'tool_result',
+        resultados.push({
+          type:        'tool_result',
           tool_use_id: block.id,
-          content: result,
+          content:     resultado,
         });
       }
 
-      // Append assistant message (with tool_use) + tool results to history
-      currentMessages = [
-        ...currentMessages,
+      mensajesActuales = [
+        ...mensajesActuales,
         { role: 'assistant', content: response.content },
-        { role: 'user', content: toolResults },
+        { role: 'user',      content: resultados },
       ] as Anthropic.MessageParam[];
 
       continue;
     }
 
-    // Unexpected stop reason
     break;
   }
 
-  // Fallback if max rounds exceeded
-  const fallback = 'Lo siento, estoy teniendo problemas para procesar tu solicitud. Por favor intenta de nuevo.';
-  await appendMessages(conversationId, [newUserMessage, { role: 'assistant', content: fallback }]);
-  return { reply: fallback, conversationId, toolsUsed };
+  const fallback = 'Lo siento, tuve un problema procesando tu mensaje. Intenta de nuevo.';
+  await agregarMensajes(telefono, [nuevoMensaje, { role: 'assistant', content: fallback }]);
+  return { reply: fallback, herramientas_usadas: herramientasUsadas };
 }

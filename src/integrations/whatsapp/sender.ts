@@ -1,85 +1,93 @@
-// WhatsApp sender — no direct WAWebJS type import needed
 import { getWhatsAppClient, isWhatsAppReady } from './client.js';
 import logger from '../../utils/logger.js';
 
-// Max WhatsApp message length
 const MAX_LENGTH = 4096;
 
 function truncate(text: string): string {
-  if (text.length <= MAX_LENGTH) return text;
-  return text.slice(0, MAX_LENGTH - 3) + '...';
+  return text.length <= MAX_LENGTH ? text : text.slice(0, MAX_LENGTH - 3) + '...';
 }
 
-export async function sendWhatsAppMessage(
-  to: string,
-  message: string
-): Promise<boolean> {
+export async function sendWhatsAppMessage(to: string, message: string): Promise<boolean> {
   const client = getWhatsAppClient();
   if (!client || !isWhatsAppReady()) {
-    logger.warn(`WhatsApp not ready, cannot send message to ${to}`);
+    logger.warn(`WhatsApp no listo, no se puede enviar a ${to}`);
     return false;
   }
 
-  const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
+  // Soporta @c.us, @lid, @s.whatsapp.net y números planos (+57...)
+  let chatId: string;
+  if (to.includes('@c.us') || to.includes('@lid') || to.includes('@s.whatsapp.net')) {
+    chatId = to.replace(/^\+/, '');
+  } else {
+    chatId = `${to.replace('+', '')}@c.us`;
+  }
 
   try {
     await client.sendMessage(chatId, truncate(message));
-    logger.debug(`WhatsApp message sent to ${chatId}`);
+    logger.debug(`WhatsApp enviado a ${chatId}`);
     return true;
   } catch (err: any) {
-    logger.error(`Failed to send WhatsApp message to ${chatId}`, { err: err.message });
+    logger.error(`Error enviando WhatsApp a ${chatId}`, { err: err.message });
     return false;
   }
 }
 
-export async function sendReservationConfirmation(
-  phone: string,
-  details: {
-    courtName: string;
-    sport: string;
-    startLabel: string;
-    durationMinutes: number;
-    price: string;
-    reservationId: string;
+export async function enviarRecordatorioPartido(
+  telefono: string,
+  detalles: {
+    deporte: string;
+    cancha: string;
+    fecha: string;
+    hora_inicio: string;
+    hora_fin: string;
+    rival: string;
   }
 ): Promise<boolean> {
-  const message =
-    `✅ *Reserva Confirmada*\n\n` +
-    `🏟️ ${details.courtName}\n` +
-    `🎾 ${details.sport.charAt(0).toUpperCase() + details.sport.slice(1)}\n` +
-    `📅 ${details.startLabel}\n` +
-    `⏱️ ${details.durationMinutes} minutos\n` +
-    `💶 ${details.price}\n\n` +
-    `ID: \`${details.reservationId.slice(0, 8)}\`\n\n` +
-    `Para cancelar responde "cancelar ${details.reservationId.slice(0, 8)}"`;
+  const mensaje =
+    `⏰ *Recordatorio de partido – Find Your Rival*\n\n` +
+    `Hola 👋 Tu partido comienza en *45 minutos*.\n\n` +
+    `⚽ Deporte: ${detalles.deporte}\n` +
+    `🏟️ Cancha: ${detalles.cancha}\n` +
+    `📅 Fecha: ${detalles.fecha}\n` +
+    `⏰ Hora: ${detalles.hora_inicio} – ${detalles.hora_fin}\n` +
+    `👤 Rival: ${detalles.rival}\n\n` +
+    `¡Te esperamos! 🏆`;
 
-  return sendWhatsAppMessage(phone, message);
+  return sendWhatsAppMessage(telefono, mensaje);
 }
 
-export async function sendMatchFound(
-  phone: string,
-  opponent: { name: string; sport: string; skillLevel: string; compatibility: number }
+export async function enviarNotificacionSinRival(
+  telefono: string,
+  deporte: string
 ): Promise<boolean> {
-  const message =
-    `🎯 *¡Rival Encontrado!*\n\n` +
-    `👤 ${opponent.name}\n` +
-    `🎾 ${opponent.sport}\n` +
-    `⭐ Nivel: ${opponent.skillLevel}\n` +
-    `🔥 Compatibilidad: ${opponent.compatibility}%\n\n` +
-    `¿Te interesa? Responde "sí" para ver horarios disponibles o "siguiente" para ver otro rival.`;
+  const mensaje =
+    `⏳ Hola, llevamos 2 horas buscando un rival compatible para tu partido de ${deporte}.\n\n` +
+    `Por ahora no encontramos a nadie disponible. Te avisaremos en cuanto aparezca un rival. 🙏\n\n` +
+    `Si quieres cambiar tu horario o deporte, responde con el nuevo horario.`;
 
-  return sendWhatsAppMessage(phone, message);
+  return sendWhatsAppMessage(telefono, mensaje);
 }
 
-export async function sendReminderMessage(
-  phone: string,
-  details: { courtName: string; startLabel: string; sport: string }
+export async function enviarMensajePago(
+  telefono: string,
+  detalles: {
+    reserva_id: number;
+    deporte: string;
+    cancha: string;
+    fecha: string;
+    hora_inicio: string;
+    hora_fin: string;
+    valor: number;
+  }
 ): Promise<boolean> {
-  const message =
-    `⏰ *Recordatorio de Reserva*\n\n` +
-    `Tu partido de ${details.sport} en ${details.courtName} comienza pronto.\n` +
-    `📅 ${details.startLabel}\n\n` +
-    `¡Suerte! 🏆`;
+  const mensaje =
+    `💳 *Datos de pago – Find Your Rival*\n\n` +
+    `Para confirmar tu reserva, realiza el pago y envíanos el comprobante:\n\n` +
+    `💰 Valor: $${detalles.valor.toLocaleString('es-CO')} COP\n\n` +
+    `📲 Nequi / Daviplata: [número del complejo]\n` +
+    `🏦 Cuenta bancaria: [datos del complejo]\n\n` +
+    `📸 Una vez pagues, envíanos la foto del comprobante aquí mismo.\n\n` +
+    `Reserva #${detalles.reserva_id} | ${detalles.deporte} | ${detalles.fecha} ${detalles.hora_inicio}`;
 
-  return sendWhatsAppMessage(phone, message);
+  return sendWhatsAppMessage(telefono, mensaje);
 }
