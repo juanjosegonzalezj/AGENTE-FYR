@@ -184,6 +184,33 @@ All routes require `X-Tenant-ID: <complex-uuid>` header.
 
 ## WhatsApp Setup
 
+### Recommended MVP path: Twilio WhatsApp
+
+Use Twilio first if you want the fastest official MVP. Twilio gives you a WhatsApp Sandbox for testing before your production WhatsApp sender is approved.
+
+1. Create or open your Twilio account.
+2. Go to Messaging -> Try it out -> Send a WhatsApp message.
+3. Copy your Account SID, Auth Token, and sandbox WhatsApp sender number.
+4. Set these variables in `.env`:
+
+```bash
+WHATSAPP_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_WHATSAPP_FROM=+14155238886
+APP_URL=https://your-public-backend-url
+```
+
+5. In Twilio Sandbox settings, set "When a message comes in" to:
+
+```text
+https://your-public-backend-url/webhooks/whatsapp/twilio
+```
+
+6. In Supabase, make sure your `sports_complexes.whatsapp_number` matches `TWILIO_WHATSAPP_FROM`, including the `+` and country code.
+
+### Local QR fallback: whatsapp-web.js
+
 1. Start the backend: `npm run dev`
 2. Visit: http://localhost:3001/webhooks/whatsapp/qr
 3. Scan the QR with WhatsApp on your phone

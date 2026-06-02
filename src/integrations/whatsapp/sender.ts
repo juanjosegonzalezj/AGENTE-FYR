@@ -1,4 +1,6 @@
 import { getWhatsAppClient, isWhatsAppReady } from './client.js';
+import { config } from '../../config/index.js';
+import { sendTwilioWhatsAppMessage } from './twilio.js';
 import logger from '../../utils/logger.js';
 
 const MAX_LENGTH = 4096;
@@ -8,13 +10,16 @@ function truncate(text: string): string {
 }
 
 export async function sendWhatsAppMessage(to: string, message: string): Promise<boolean> {
+  if (config.WHATSAPP_PROVIDER === 'twilio') {
+    return sendTwilioWhatsAppMessage(to, truncate(message));
+  }
+
   const client = getWhatsAppClient();
   if (!client || !isWhatsAppReady()) {
     logger.warn(`WhatsApp no listo, no se puede enviar a ${to}`);
     return false;
   }
 
-  // Soporta @c.us, @lid, @s.whatsapp.net y números planos (+57...)
   let chatId: string;
   if (to.includes('@c.us') || to.includes('@lid') || to.includes('@s.whatsapp.net')) {
     chatId = to.replace(/^\+/, '');
@@ -44,14 +49,14 @@ export async function enviarRecordatorioPartido(
   }
 ): Promise<boolean> {
   const mensaje =
-    `⏰ *Recordatorio de partido – Find Your Rival*\n\n` +
-    `Hola 👋 Tu partido comienza en *45 minutos*.\n\n` +
-    `⚽ Deporte: ${detalles.deporte}\n` +
-    `🏟️ Cancha: ${detalles.cancha}\n` +
-    `📅 Fecha: ${detalles.fecha}\n` +
-    `⏰ Hora: ${detalles.hora_inicio} – ${detalles.hora_fin}\n` +
-    `👤 Rival: ${detalles.rival}\n\n` +
-    `¡Te esperamos! 🏆`;
+    `*Recordatorio de partido - Find Your Rival*\n\n` +
+    `Hola. Tu partido comienza en *45 minutos*.\n\n` +
+    `Deporte: ${detalles.deporte}\n` +
+    `Cancha: ${detalles.cancha}\n` +
+    `Fecha: ${detalles.fecha}\n` +
+    `Hora: ${detalles.hora_inicio} - ${detalles.hora_fin}\n` +
+    `Rival: ${detalles.rival}\n\n` +
+    `Te esperamos!`;
 
   return sendWhatsAppMessage(telefono, mensaje);
 }
@@ -61,8 +66,8 @@ export async function enviarNotificacionSinRival(
   deporte: string
 ): Promise<boolean> {
   const mensaje =
-    `⏳ Hola, llevamos 2 horas buscando un rival compatible para tu partido de ${deporte}.\n\n` +
-    `Por ahora no encontramos a nadie disponible. Te avisaremos en cuanto aparezca un rival. 🙏\n\n` +
+    `Hola, llevamos 2 horas buscando un rival compatible para tu partido de ${deporte}.\n\n` +
+    `Por ahora no encontramos a nadie disponible. Te avisaremos en cuanto aparezca un rival.\n\n` +
     `Si quieres cambiar tu horario o deporte, responde con el nuevo horario.`;
 
   return sendWhatsAppMessage(telefono, mensaje);
@@ -81,12 +86,12 @@ export async function enviarMensajePago(
   }
 ): Promise<boolean> {
   const mensaje =
-    `💳 *Datos de pago – Find Your Rival*\n\n` +
-    `Para confirmar tu reserva, realiza el pago y envíanos el comprobante:\n\n` +
-    `💰 Valor: $${detalles.valor.toLocaleString('es-CO')} COP\n\n` +
-    `📲 Nequi / Daviplata: [número del complejo]\n` +
-    `🏦 Cuenta bancaria: [datos del complejo]\n\n` +
-    `📸 Una vez pagues, envíanos la foto del comprobante aquí mismo.\n\n` +
+    `*Datos de pago - Find Your Rival*\n\n` +
+    `Para confirmar tu reserva, realiza el pago y envianos el comprobante:\n\n` +
+    `Valor: $${detalles.valor.toLocaleString('es-CO')} COP\n\n` +
+    `Nequi / Daviplata: [numero del complejo]\n` +
+    `Cuenta bancaria: [datos del complejo]\n\n` +
+    `Una vez pagues, envianos la foto del comprobante aqui mismo.\n\n` +
     `Reserva #${detalles.reserva_id} | ${detalles.deporte} | ${detalles.fecha} ${detalles.hora_inicio}`;
 
   return sendWhatsAppMessage(telefono, mensaje);

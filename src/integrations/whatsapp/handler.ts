@@ -4,78 +4,93 @@ import { confirmarPago, obtenerReservaPorTelefono } from '../../db/queries/reser
 import { sendWhatsAppMessage } from './sender.js';
 import logger from '../../utils/logger.js';
 
-function normalizarTelefono(from: string): string {
-  // Elimina cualquier sufijo de WhatsApp (@c.us, @lid, @s.whatsapp.net)
-  // y agrega + al inicio para tener formato E.164 limpio
-  const digits = from
+function normalizarTelefono(value: string): string {
+  const withoutPrefix = value.replace(/^whatsapp:/, '');
+  if (withoutPrefix.startsWith('+')) return withoutPrefix;
+
+  const digits = withoutPrefix
     .replace('@c.us', '')
     .replace('@lid', '')
     .replace('@s.whatsapp.net', '')
     .replace(/^\+/, '');
-  return `+${digits}`;
+
+  return digits ? `+${digits}` : '';
 }
 
 function esMensajeDePago(texto: string): boolean {
   const palabrasClave = [
-    'pagué', 'pague', 'ya pagué', 'ya pague', 'aquí está',
-    'te mando', 'te envío', 'comprobante', 'transferencia', 'consigné',
-    'consigne', 'hice el pago', 'realicé el pago', 'pago hecho',
+    'pague', 'ya pague', 'comprobante', 'transferencia', 'consigne',
+    'hice el pago', 'realice el pago', 'pago hecho',
   ];
   const lower = texto.toLowerCase();
   return palabrasClave.some(p => lower.includes(p));
 }
 
+export async function handleIncomingWhatsAppText(input: {
+  from: string;
+  to?: string;
+  text: string;
+}): Promise<string> {
+  const telefono = normalizarTelefono(input.from);
+  const texto = input.text.trim();
+
+  logger.info(`WhatsApp desde ${telefono}: "${texto.slice(0, 80)}"`);
+
+  if (esMensajeDePago(texto)) {
+    const reserva = await obtenerReservaPorTelefono(telefono);
+    if (reserva && reserva.estado_pago === 'pendiente_pago') {
+      return 'Perfecto. Para confirmar tu reserva, enviame la foto o captura del comprobante de pago.';
+    }
+  }
+
+  try {
+    const { reply } = await runAgent(texto, telefono);
+    return reply;
+  } catch (err: any) {
+    logger.error('Error ejecutando agente', { telefono, err: err?.message ?? String(err) });
+    return 'Lo siento, tuve un problema. Intenta de nuevo en un momento.';
+  }
+}
+
 export async function handleIncomingWhatsAppMessage(msg: WhatsApp.Message): Promise<void> {
-  const chatId   = msg.from;                      // ID original de WhatsApp (para enviar)
-  const telefono = normalizarTelefono(msg.from);  // Número limpio (para DB y agente)
-  const texto    = msg.body?.trim() ?? '';
+  const chatId = msg.from;
+  const telefono = normalizarTelefono(msg.from);
+  const texto = msg.body?.trim() ?? '';
   const tieneMedia = msg.hasMedia;
 
   logger.info(`WhatsApp desde ${telefono}: "${texto.slice(0, 80)}"${tieneMedia ? ' [media]' : ''}`);
 
-  // Obtener el chat para responder directamente (evita problemas con @lid)
   let chat: Awaited<ReturnType<typeof msg.getChat>> | null = null;
   try {
     chat = await msg.getChat();
     await chat.sendStateTyping();
-  } catch { /* no crítico */ }
+  } catch {
+    // Typing state is helpful but not required.
+  }
 
-  // Función helper: responde usando el chat original si está disponible
-  const responder = async (texto: string) => {
+  const responder = async (respuesta: string) => {
     try {
       if (chat) {
-        await chat.sendMessage(texto);
+        await chat.sendMessage(respuesta);
       } else {
-        await sendWhatsAppMessage(chatId, texto);
+        await sendWhatsAppMessage(chatId, respuesta);
       }
     } catch (err: any) {
       logger.error('Error enviando respuesta', { err: err?.message ?? String(err) });
     }
   };
 
-  // ── Media → posible comprobante de pago ───────────────────────────────────
   if (tieneMedia) {
     await manejarComprobante(msg, responder, telefono);
     return;
   }
 
-  // ── Anuncio de pago sin imagen → pedir comprobante ────────────────────────
-  if (esMensajeDePago(texto)) {
-    const reserva = await obtenerReservaPorTelefono(telefono);
-    if (reserva && reserva.estado_pago === 'pendiente_pago') {
-      await responder('¡Perfecto! Para confirmar tu reserva, envíame la foto o captura del comprobante de pago. 📸');
-      return;
-    }
-  }
-
-  // ── Mensaje normal → agente Lucía ─────────────────────────────────────────
-  try {
-    const { reply } = await runAgent(texto, telefono);
-    await responder(reply);
-  } catch (err: any) {
-    logger.error('Error ejecutando agente', { telefono, err: err?.message ?? String(err) });
-    await responder('Lo siento, tuve un problema. Intenta de nuevo en un momento. 🙏');
-  }
+  const reply = await handleIncomingWhatsAppText({
+    from: telefono,
+    to: normalizarTelefono(msg.to ?? ''),
+    text: texto,
+  });
+  await responder(reply);
 }
 
 async function manejarComprobante(
@@ -86,12 +101,12 @@ async function manejarComprobante(
   const reserva = await obtenerReservaPorTelefono(telefono);
 
   if (!reserva) {
-    await responder('Recibí tu imagen, pero no tienes una reserva pendiente de pago. ¿En qué puedo ayudarte?');
+    await responder('Recibi tu imagen, pero no tienes una reserva pendiente de pago. En que puedo ayudarte?');
     return;
   }
 
   if (reserva.estado_pago === 'confirmado') {
-    await responder(`Tu reserva #${reserva.id} ya está confirmada y pagada. ¡Nos vemos el ${reserva.fecha} a las ${reserva.hora_inicio}! ⚽`);
+    await responder(`Tu reserva #${reserva.id} ya esta confirmada y pagada. Nos vemos el ${reserva.fecha} a las ${reserva.hora_inicio}!`);
     return;
   }
 
@@ -110,16 +125,15 @@ async function manejarComprobante(
     const actualizada = await confirmarPago(reserva.id, comprobanteUrl);
 
     await responder(
-      `✅ *¡Pago confirmado!*\n\n` +
-      `Tu partido está RESERVADO 🎉\n\n` +
-      `📅 Fecha: ${actualizada.fecha}\n` +
-      `⏰ Hora: ${actualizada.hora_inicio} – ${actualizada.hora_fin}\n` +
-      `🏟️ Cancha: ${actualizada.cancha}\n` +
-      `⚽ Deporte: ${actualizada.deporte}\n\n` +
-      `Te enviamos un recordatorio 45 minutos antes. ¡Buena suerte! 🏆`
+      `*Pago confirmado!*\n\n` +
+      `Tu partido esta RESERVADO.\n\n` +
+      `Fecha: ${actualizada.fecha}\n` +
+      `Hora: ${actualizada.hora_inicio} - ${actualizada.hora_fin}\n` +
+      `Cancha: ${actualizada.cancha}\n` +
+      `Deporte: ${actualizada.deporte}\n\n` +
+      `Te enviamos un recordatorio 45 minutos antes.`
     );
 
-    // Notificar al rival (usa sendWhatsAppMessage con número de teléfono)
     const telefonoRival = actualizada.telefono_1 === telefono
       ? actualizada.telefono_2
       : actualizada.telefono_1;
@@ -128,15 +142,15 @@ async function manejarComprobante(
       : actualizada.capitan_2;
 
     await sendWhatsAppMessage(telefonoRival,
-      `🎉 *¡Partido confirmado!*\n\n` +
-      `${nombreSolicitante} confirmó el pago.\n\n` +
-      `📅 Fecha: ${actualizada.fecha}\n` +
-      `⏰ Hora: ${actualizada.hora_inicio} – ${actualizada.hora_fin}\n` +
-      `🏟️ Cancha: ${actualizada.cancha}\n\n` +
-      `¡Te esperamos! 💪`
+      `*Partido confirmado!*\n\n` +
+      `${nombreSolicitante} confirmo el pago.\n\n` +
+      `Fecha: ${actualizada.fecha}\n` +
+      `Hora: ${actualizada.hora_inicio} - ${actualizada.hora_fin}\n` +
+      `Cancha: ${actualizada.cancha}\n\n` +
+      `Te esperamos!`
     );
   } catch (err: any) {
     logger.error('Error confirmando pago', { err: err?.message ?? String(err) });
-    await responder('Recibí tu comprobante pero tuve un problema al confirmarlo. Lo revisamos manualmente. 🙏');
+    await responder('Recibi tu comprobante pero tuve un problema al confirmarlo. Lo revisamos manualmente.');
   }
 }

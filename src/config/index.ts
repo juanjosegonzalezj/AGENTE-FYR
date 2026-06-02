@@ -21,7 +21,11 @@ const configSchema = z.object({
   GOOGLE_REDIRECT_URI: z.string().url('GOOGLE_REDIRECT_URI must be a valid URL'),
 
   // WhatsApp
+  WHATSAPP_PROVIDER: z.enum(['webjs', 'twilio']).default('webjs'),
   WHATSAPP_SESSION_PATH: z.string().default('./whatsapp-session'),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_WHATSAPP_FROM: z.string().optional(),
 
   // Security
   ENCRYPTION_KEY: z.string().min(32, 'ENCRYPTION_KEY must be at least 32 characters'),
@@ -56,7 +60,11 @@ const devSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional().default('placeholder'),
   GOOGLE_CLIENT_SECRET: z.string().optional().default('placeholder'),
   GOOGLE_REDIRECT_URI: z.string().optional().default('http://localhost:3001/api/v1/calendar/oauth/callback'),
+  WHATSAPP_PROVIDER: z.enum(['webjs', 'twilio']).default('webjs'),
   WHATSAPP_SESSION_PATH: z.string().default('./whatsapp-session'),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_WHATSAPP_FROM: z.string().optional(),
   ENCRYPTION_KEY: z.string().optional().default('00000000000000000000000000000000'),
   APP_URL: z.string().default('http://localhost:3001'),
   FRONTEND_URL: z.string().default('http://localhost:3000'),
