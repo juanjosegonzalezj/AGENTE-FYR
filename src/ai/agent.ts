@@ -6,6 +6,7 @@ import { buscarRival } from './tools/matchmaking.js';
 import { consultarDisponibilidad } from '../integrations/google-calendar/availability.js';
 import { crearEventoCalendario, eliminarEventoCalendario } from '../integrations/google-calendar/events.js';
 import { crearSolicitud, actualizarSolicitud, obtenerSolicitudPorTelefono } from '../db/queries/solicitudes.js';
+import { enviarMensajeTwilio } from '../integrations/twilio/sender.js';
 import { crearReserva, confirmarPago, obtenerReservaPorTelefono, obtenerReservaPorId, cancelarReserva, actualizarReserva } from '../db/queries/reservas.js';
 import { obtenerOCrearConversacion, agregarMensajes } from '../db/queries/conversaciones.js';
 import type { MensajeIA, DeporteTipo, NivelFutbol, NivelPadel } from '../types/index.js';
@@ -158,6 +159,41 @@ async function ejecutarHerramienta(
         return JSON.stringify({
           ok: true,
           mensaje: `Reserva #${reserva.id} cancelada correctamente.`,
+        });
+      }
+
+      case 'contactar_rival': {
+        const solicitudId    = input.solicitud_id as number;
+        const rivalNombre    = input.rival_nombre as string;
+        const rivalTelefono  = input.rival_telefono as string;
+        const solNombre      = input.solicitante_nombre as string;
+        const deporte        = input.deporte as string;
+        const nivel          = input.nivel as string;
+        const fecha          = input.fecha_propuesta as string | undefined;
+        const hora           = input.hora_propuesta  as string | undefined;
+
+        const fechaTexto = fecha && hora ? ` para el *${fecha} a las ${hora}*` : '';
+
+        const mensajeRival =
+          `Hola ${rivalNombre} 👋 Soy *Lucía* de Find Your Rival.\n\n` +
+          `*${solNombre}* quiere jugar un partido de *${deporte}* (nivel ${nivel})${fechaTexto} y encontramos que serían buenos rivales.\n\n` +
+          `¿Estás disponible? Responde *SÍ* o *NO* 🏆`;
+
+        await enviarMensajeTwilio(rivalTelefono, mensajeRival);
+
+        // Actualizar solicitud: rival encontrado, esperando confirmación
+        await actualizarSolicitud(solicitudId, {
+          rival_nombre:              rivalNombre,
+          rival_telefono:            rivalTelefono,
+          rival_encontrado:          true,
+          estado:                    'rival_encontrado',
+          rival_confirmacion_estado: 'esperando',
+          busqueda_activa:           false,
+        });
+
+        return JSON.stringify({
+          ok: true,
+          mensaje: `Mensaje enviado a ${rivalNombre} (${rivalTelefono}). Esperando su respuesta. Le avisaré al solicitante cuando confirme.`,
         });
       }
 

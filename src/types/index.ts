@@ -50,6 +50,7 @@ export interface Solicitud {
   observaciones: string | null;
   busqueda_activa: boolean;
   notificado_sin_rival: boolean;
+  rival_confirmacion_estado: 'esperando' | 'confirmado' | 'rechazado' | null;
 }
 
 export interface Reserva {

@@ -90,6 +90,21 @@ export async function obtenerSolicitudesVencidas(): Promise<Solicitud[]> {
   return (data ?? []) as Solicitud[];
 }
 
+// Busca una solicitud donde este teléfono ES el rival y está esperando confirmar
+export async function buscarSolicitudEsperandoConfirmacion(
+  rivalTelefono: string
+): Promise<Solicitud | null> {
+  const { data } = await db.client
+    .from('Solicitudes')
+    .select('*')
+    .eq('rival_telefono', rivalTelefono)
+    .eq('rival_confirmacion_estado', 'esperando')
+    .order('fecha_solicitud', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as Solicitud) ?? null;
+}
+
 export async function buscarSolicitudesPendientesCompatibles(opts: {
   deporte: DeporteTipo;
   nivel: string;

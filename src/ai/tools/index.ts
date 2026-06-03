@@ -110,6 +110,28 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'contactar_rival',
+    description:
+      'Envía un mensaje WhatsApp al rival encontrado preguntando su disponibilidad. ' +
+      'OBLIGATORIO llamar antes de crear una reserva. ' +
+      'Actualiza la solicitud a estado "esperando confirmación del rival". ' +
+      'El sistema notificará al solicitante cuando el rival responda.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        solicitud_id:    { type: 'number',  description: 'ID de la solicitud del jugador que busca rival.' },
+        rival_nombre:    { type: 'string',  description: 'Nombre del rival.' },
+        rival_telefono:  { type: 'string',  description: 'Teléfono del rival (con código de país).' },
+        solicitante_nombre: { type: 'string', description: 'Nombre del jugador que busca rival.' },
+        deporte:         { type: 'string',  enum: ['fútbol', 'pádel'] },
+        nivel:           { type: 'string',  description: 'Nivel del partido.' },
+        fecha_propuesta: { type: 'string',  description: 'Fecha propuesta YYYY-MM-DD.' },
+        hora_propuesta:  { type: 'string',  description: 'Hora propuesta HH:MM.' },
+      },
+      required: ['solicitud_id', 'rival_nombre', 'rival_telefono', 'solicitante_nombre', 'deporte', 'nivel'],
+    },
+  },
+  {
     name: 'obtener_solicitud',
     description: 'Obtiene la solicitud activa de un usuario por su teléfono.',
     input_schema: {
