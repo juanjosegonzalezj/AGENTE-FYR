@@ -44,3 +44,18 @@ export async function enviarRecordatorioTwilio(
     `👤 Rival: ${detalles.rival}\n\n¡Te esperamos! 🏆`
   );
 }
+
+export async function enviarDatosPago(
+  telefono: string,
+  detalles: { reserva_id: number; deporte: string; fecha: string; hora_inicio: string; valor: number }
+): Promise<boolean> {
+  return enviarMensajeTwilio(telefono,
+    `💳 *Datos de pago – Find Your Rival*\n\n` +
+    `Para confirmar tu reserva realiza el pago y envíanos el comprobante:\n\n` +
+    `💰 Valor: *$${detalles.valor.toLocaleString('es-CO')} COP*\n\n` +
+    `🏦 *Bancolombia – Cuenta de Ahorros*\n` +
+    `Número: *11576321165*\n\n` +
+    `📸 Una vez pagues, envíanos aquí la foto del comprobante.\n\n` +
+    `_Reserva #${detalles.reserva_id} | ${detalles.deporte} | ${detalles.fecha} ${detalles.hora_inicio}_`
+  );
+}

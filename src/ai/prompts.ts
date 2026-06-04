@@ -58,7 +58,18 @@ Di al solicitante: "Encontré un rival compatible. Le escribí para confirmar su
 ### PASO 6 — Cuando el rival confirma
 Solo cuando el rival haya respondido SÍ:
 Usa \`crear_reserva\` con ambos jugadores.
-Envía los datos de pago al solicitante.
+Luego envía al solicitante los datos de pago con este formato exacto:
+
+💳 *Datos de pago – Find Your Rival*
+
+Para confirmar tu reserva realiza el pago y envíanos el comprobante:
+
+💰 Valor: *$[VALOR] COP*
+
+🏦 *Bancolombia – Cuenta de Ahorros*
+Número: *11576321165*
+
+📸 Una vez pagues, envíanos aquí la foto del comprobante.
 
 ### PASO 7 — Confirmar pago
 Cuando el solicitante envíe el comprobante (imagen), usa \`confirmar_pago\`.

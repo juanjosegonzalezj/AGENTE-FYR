@@ -1,6 +1,37 @@
 import { db } from '../client.js';
 import type { Solicitud, EstadoSolicitud, DeporteTipo } from '../../types/index.js';
 
+// Verifica si ya existe una solicitud activa para este teléfono/nombre.
+// Retorna la existente si la hay, para evitar duplicados.
+export async function verificarSolicitudDuplicada(
+  telefono: string,
+  nombre: string
+): Promise<Solicitud | null> {
+  // Primero busca por teléfono (identificador principal)
+  const { data: porTelefono } = await db.client
+    .from('Solicitudes')
+    .select('*')
+    .eq('telefono', telefono)
+    .not('estado', 'in', '("completado","cancelado")')
+    .order('fecha_solicitud', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (porTelefono) return porTelefono as Solicitud;
+
+  // También busca por nombre exacto (misma persona con otro número)
+  const { data: porNombre } = await db.client
+    .from('Solicitudes')
+    .select('*')
+    .ilike('nombre', nombre.trim())
+    .not('estado', 'in', '("completado","cancelado")')
+    .order('fecha_solicitud', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return (porNombre as Solicitud) ?? null;
+}
+
 export async function crearSolicitud(payload: {
   nombre: string;
   telefono: string;
@@ -8,7 +39,13 @@ export async function crearSolicitud(payload: {
   nivel: string;
   horario_deseado?: string;
   observaciones?: string;
-}): Promise<Solicitud> {
+}): Promise<{ solicitud: Solicitud; esDuplicado: boolean }> {
+  // Evitar doble registro
+  const existente = await verificarSolicitudDuplicada(payload.telefono, payload.nombre);
+  if (existente) {
+    return { solicitud: existente, esDuplicado: true };
+  }
+
   const { data, error } = await db.client
     .from('Solicitudes')
     .insert({
@@ -22,7 +59,7 @@ export async function crearSolicitud(payload: {
     .single();
 
   if (error) throw new Error(`Error creando solicitud: ${error.message}`);
-  return data as Solicitud;
+  return { solicitud: data as Solicitud, esDuplicado: false };
 }
 
 export async function actualizarSolicitud(

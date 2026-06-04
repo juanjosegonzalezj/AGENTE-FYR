@@ -28,7 +28,7 @@ async function ejecutarHerramienta(
     switch (nombre) {
 
       case 'registrar_solicitud': {
-        const sol = await crearSolicitud({
+        const { solicitud: sol, esDuplicado } = await crearSolicitud({
           nombre:          input.nombre as string,
           telefono:        input.telefono as string,
           deporte:         input.deporte as DeporteTipo,
@@ -36,9 +36,19 @@ async function ejecutarHerramienta(
           horario_deseado: input.horario_deseado as string | undefined,
           observaciones:   input.observaciones as string | undefined,
         });
+        if (esDuplicado) {
+          return JSON.stringify({
+            ok: true,
+            solicitud_id: sol.id,
+            esDuplicado: true,
+            estado_actual: sol.estado,
+            mensaje: `Ya tienes una solicitud activa (ID: ${sol.id}, estado: ${sol.estado}). Continuamos con ella en lugar de crear una nueva.`,
+          });
+        }
         return JSON.stringify({
           ok: true,
           solicitud_id: sol.id,
+          esDuplicado: false,
           mensaje: `Solicitud registrada correctamente (ID: ${sol.id}).`,
         });
       }
