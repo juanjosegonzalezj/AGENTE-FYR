@@ -142,4 +142,54 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ['telefono'],
     },
   },
+  {
+    name: 'verificar_registro',
+    description:
+      'Verifica si un teléfono está registrado en la base de Capitanes o de Clientes del complejo. ' +
+      'SIEMPRE llama esta herramienta al inicio de la conversación con un usuario nuevo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        telefono: { type: 'string', description: 'Teléfono del usuario.' },
+      },
+      required: ['telefono'],
+    },
+  },
+  {
+    name: 'registrar_en_capitanes',
+    description:
+      'Registra a un nuevo jugador en la base de Capitanes de Find Your Rival. ' +
+      'Usar solo cuando verificar_registro devuelva que el usuario NO está registrado.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombre_capitan:  { type: 'string', description: 'Nombre completo del jugador.' },
+        telefono:        { type: 'string', description: 'Teléfono con código de país.' },
+        sport_type:      { type: 'string', enum: ['fútbol', 'pádel', 'ambos'] },
+        nivel_futbol:    { type: 'string', enum: ['Bajo', 'Intermedio', 'Alto'], description: 'Requerido si juega fútbol.' },
+        nivel_padel:     { type: 'string', enum: ['1ra', '2da', '3ra', '4ta', '5ta'], description: 'Requerido si juega pádel.' },
+        franja_horaria:  {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Franjas disponibles. Valores válidos: "6am-9am", "9am-12pm", "12pm-3pm", "3pm-6pm", "6pm-9pm", "9pm-11pm".',
+        },
+      },
+      required: ['nombre_capitan', 'telefono', 'sport_type', 'franja_horaria'],
+    },
+  },
+  {
+    name: 'cancelar_mi_reserva',
+    description:
+      'Cancela la reserva activa del usuario. ' +
+      'Notifica automáticamente al rival y le pregunta si desea continuar buscando. ' +
+      'Elimina el evento de Google Calendar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        telefono_usuario: { type: 'string', description: 'Teléfono del usuario que cancela.' },
+        motivo:           { type: 'string', description: 'Motivo de la cancelación (opcional).' },
+      },
+      required: ['telefono_usuario'],
+    },
+  },
 ];

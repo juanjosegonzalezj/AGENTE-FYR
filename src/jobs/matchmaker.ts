@@ -6,6 +6,7 @@ import {
 import { buscarRival } from '../ai/tools/matchmaking.js';
 import { enviarNotificacionSinRival, sendWhatsAppMessage } from '../integrations/whatsapp/sender.js';
 import { enviarMensajeTwilio } from '../integrations/twilio/sender.js';
+import { obtenerReservasParaCompletar, marcarCompletada } from '../db/queries/reservas.js';
 import type { Solicitud, DeporteTipo, NivelFutbol, NivelPadel } from '../types/index.js';
 import logger from '../utils/logger.js';
 
@@ -154,10 +155,47 @@ export async function jobNotificarSinRival(): Promise<void> {
   }
 }
 
-export function iniciarJobsMatchmaking(): { matchmaker: NodeJS.Timeout; sinRival: NodeJS.Timeout } {
-  logger.info('Jobs matchmaking iniciados (matchmaker: 5min, sin rival: 15min)');
+// Job que marca como completadas las reservas cuyo partido ya terminó (cada hora)
+export async function jobCompletarReservasPasadas(): Promise<void> {
+  try {
+    const reservas = await obtenerReservasParaCompletar();
+    if (reservas.length === 0) return;
+
+    logger.info(`Job completar reservas: ${reservas.length} partido(s) finalizado(s)`);
+
+    for (const reserva of reservas) {
+      try {
+        await marcarCompletada(reserva.id);
+
+        // Notificar a ambos capitanes que el partido quedó registrado
+        const msg =
+          `✅ *Partido completado*\n\n` +
+          `Tu partido del *${reserva.fecha}* quedó registrado como completado. ` +
+          `¡Gracias por jugar con Find Your Rival! 🏆\n\n` +
+          `¿Quieres organizar otro partido? Solo escríbenos.`;
+
+        await enviarMensajeTwilio(reserva.telefono_1, msg);
+        await enviarMensajeTwilio(reserva.telefono_2, msg);
+
+        logger.info(`Reserva #${reserva.id} marcada como completada`);
+      } catch (err: any) {
+        logger.error(`Error completando reserva #${reserva.id}`, { err: err?.message });
+      }
+    }
+  } catch (err: any) {
+    logger.error('Error en job completar reservas', { err: err?.message });
+  }
+}
+
+export function iniciarJobsMatchmaking(): {
+  matchmaker: NodeJS.Timeout;
+  sinRival:   NodeJS.Timeout;
+  completar:  NodeJS.Timeout;
+} {
+  logger.info('Jobs matchmaking iniciados (matchmaker: 5min, sin rival: 15min, completar: 1h)');
   return {
-    matchmaker: setInterval(jobMatchmaker,        5 * 60 * 1000),
-    sinRival:   setInterval(jobNotificarSinRival, 15 * 60 * 1000),
+    matchmaker: setInterval(jobMatchmaker,              5 * 60 * 1000),
+    sinRival:   setInterval(jobNotificarSinRival,       15 * 60 * 1000),
+    completar:  setInterval(jobCompletarReservasPasadas, 60 * 60 * 1000),
   };
 }

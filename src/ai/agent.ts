@@ -8,6 +8,7 @@ import { crearEventoCalendario, eliminarEventoCalendario } from '../integrations
 import { crearSolicitud, actualizarSolicitud, obtenerSolicitudPorTelefono } from '../db/queries/solicitudes.js';
 import { enviarMensajeTwilio } from '../integrations/twilio/sender.js';
 import { crearReserva, confirmarPago, obtenerReservaPorTelefono, obtenerReservaPorId, cancelarReserva, actualizarReserva } from '../db/queries/reservas.js';
+import { verificarRegistroTelefono, insertarCapitan } from '../db/queries/capitanes.js';
 import { obtenerOCrearConversacion, agregarMensajes } from '../db/queries/conversaciones.js';
 import type { MensajeIA, DeporteTipo, NivelFutbol, NivelPadel } from '../types/index.js';
 import logger from '../utils/logger.js';
@@ -213,6 +214,71 @@ async function ejecutarHerramienta(
           return JSON.stringify({ encontrado: false, mensaje: 'No tienes una solicitud activa.' });
         }
         return JSON.stringify({ encontrado: true, solicitud: sol });
+      }
+
+      case 'verificar_registro': {
+        const tel = input.telefono as string;
+        const fuente = await verificarRegistroTelefono(tel);
+        if (fuente) {
+          return JSON.stringify({ registrado: true, fuente, mensaje: `Usuario registrado en ${fuente}.` });
+        }
+        return JSON.stringify({
+          registrado: false,
+          mensaje: 'Usuario NO registrado. Debes pedirle los datos y registrarlo en Capitanes antes de continuar.',
+        });
+      }
+
+      case 'registrar_en_capitanes': {
+        const capitan = await insertarCapitan({
+          nombre_capitan: input.nombre_capitan as string,
+          telefono:       input.telefono       as string,
+          sport_type:     input.sport_type     as any,
+          nivel_futbol:   (input.nivel_futbol  as any) ?? 'Intermedio',
+          nivel_padel:    (input.nivel_padel   as any) ?? '3ra',
+          franja_horaria: input.franja_horaria as string[],
+        });
+        return JSON.stringify({
+          ok: true,
+          capitan_id: capitan.id,
+          mensaje: `${capitan.nombre_capitan} registrado correctamente en la base de Capitanes.`,
+        });
+      }
+
+      case 'cancelar_mi_reserva': {
+        const telUsuario = input.telefono_usuario as string;
+        const reserva = await obtenerReservaPorTelefono(telUsuario);
+
+        if (!reserva) {
+          return JSON.stringify({ ok: false, mensaje: 'No tienes una reserva activa para cancelar.' });
+        }
+
+        const reservaCancelada = await cancelarReserva(reserva.id);
+
+        // Eliminar evento de Google Calendar
+        if (reservaCancelada.google_calendar_event_id) {
+          await eliminarEventoCalendario(reservaCancelada.google_calendar_event_id);
+        }
+
+        // Identificar al rival y notificarlo
+        const esCapitan1     = reservaCancelada.telefono_1 === telUsuario;
+        const telefonoRival  = esCapitan1 ? reservaCancelada.telefono_2 : reservaCancelada.telefono_1;
+        const nombreCancela  = esCapitan1 ? reservaCancelada.capitan_1  : reservaCancelada.capitan_2;
+        const nombreRival    = esCapitan1 ? reservaCancelada.capitan_2  : reservaCancelada.capitan_1;
+
+        await enviarMensajeTwilio(
+          telefonoRival,
+          `😕 *Partido cancelado*\n\n` +
+          `Lo sentimos, *${nombreCancela}* canceló el partido del *${reservaCancelada.fecha}* ` +
+          `a las *${reservaCancelada.hora_inicio}*.\n\n` +
+          `¿Quieres que busquemos otro rival para ti? Responde *SÍ* o *NO*.`
+        );
+
+        return JSON.stringify({
+          ok: true,
+          reserva_id:      reservaCancelada.id,
+          rival_notificado: nombreRival,
+          mensaje: `Reserva #${reservaCancelada.id} cancelada. ${nombreRival} fue notificado y se le preguntó si quiere seguir buscando rival.`,
+        });
       }
 
       default:

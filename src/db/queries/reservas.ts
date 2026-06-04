@@ -87,11 +87,44 @@ export async function actualizarReserva(
   return data as Reserva;
 }
 
-export async function cancelarReserva(id: number): Promise<void> {
-  await db.client
+export async function cancelarReserva(id: number): Promise<Reserva> {
+  const { data, error } = await db.client
     .from('Reservas')
     .update({ estado_reserva: 'cancelada' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(`Error cancelando reserva: ${error.message}`);
+  return data as Reserva;
+}
+
+export async function marcarCompletada(id: number): Promise<void> {
+  await db.client
+    .from('Reservas')
+    .update({ estado_reserva: 'completada' })
     .eq('id', id);
+}
+
+// Reservas confirmadas cuyo partido ya terminó (para marcarlas como completadas)
+export async function obtenerReservasParaCompletar(): Promise<Reserva[]> {
+  // Traemos reservas reservadas de los últimos 7 días y filtramos en código
+  const hace7dias = new Date();
+  hace7dias.setDate(hace7dias.getDate() - 7);
+  const desde = hace7dias.toISOString().split('T')[0];
+
+  const { data } = await db.client
+    .from('Reservas')
+    .select('*')
+    .eq('estado_reserva', 'reservada')
+    .eq('estado_pago', 'confirmado')
+    .gte('fecha', desde);
+
+  const ahora = new Date();
+  return ((data ?? []) as Reserva[]).filter(r => {
+    // Combinar fecha + hora_fin para saber si ya terminó
+    const fin = new Date(`${r.fecha}T${r.hora_fin}:00-05:00`); // Colombia UTC-5
+    return fin < ahora;
+  });
 }
 
 // Para el job de recordatorios: reservas confirmadas en los próximos 45 min
