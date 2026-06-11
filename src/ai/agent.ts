@@ -330,10 +330,17 @@ export async function runAgent(
 ): Promise<AgentResponse> {
   // 1. Cargar historial de conversación
   const conv = await obtenerOCrearConversacion(telefono);
-  const esConversacionNueva = !conv.mensajes || conv.mensajes.length === 0;
+  const mensajesGuardados = conv.mensajes ?? [];
 
-  // Primer mensaje: saludo hardcodeado exacto
-  if (esConversacionNueva) {
+  // Verificar si el saludo ya fue enviado en este historial
+  const yaSePresento = mensajesGuardados.some(m =>
+    m.role === 'assistant' &&
+    typeof m.content === 'string' &&
+    m.content.includes('la asistente virtual de Find Your Rival')
+  );
+
+  // Primer mensaje: saludo hardcodeado — se envía si nunca se ha presentado
+  if (!yaSePresento) {
     const saludo =
       `Hola, soy Lucía, la asistente virtual de Find Your Rival. ` +
       `Te ayudaré a encontrar un rival compatible para jugar. ` +
@@ -345,7 +352,7 @@ export async function runAgent(
     return { reply: saludo, herramientas_usadas: [] };
   }
 
-  const historial: MensajeIA[] = [...(conv.mensajes ?? [])];
+  const historial: MensajeIA[] = [...mensajesGuardados];
   const nuevoMensaje: MensajeIA = { role: 'user', content: mensajeUsuario };
   historial.push(nuevoMensaje);
 
