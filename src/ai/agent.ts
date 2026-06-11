@@ -16,7 +16,7 @@ import logger from '../utils/logger.js';
 const anthropic = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
 const MODEL        = 'claude-sonnet-4-6';
-const MAX_TOKENS   = 1024;
+const MAX_TOKENS   = 350; // WhatsApp: respuestas cortas, una pregunta por turno
 const MAX_ROUNDS   = 8;
 
 // ── Ejecutor de herramientas ──────────────────────────────────────────────────
