@@ -10,6 +10,7 @@ import { enviarMensajeTwilio } from '../integrations/twilio/sender.js';
 import { crearReserva, confirmarPago, obtenerReservaPorTelefono, obtenerReservaPorId, cancelarReserva, actualizarReserva } from '../db/queries/reservas.js';
 import { verificarRegistroTelefono, insertarCapitan } from '../db/queries/capitanes.js';
 import { obtenerOCrearConversacion, agregarMensajes } from '../db/queries/conversaciones.js';
+import { procesarOnboarding, onboardingTerminado } from './onboarding.js';
 import type { MensajeIA, DeporteTipo, NivelFutbol, NivelPadel } from '../types/index.js';
 import logger from '../utils/logger.js';
 
@@ -349,7 +350,48 @@ export async function runAgent(
   const nuevoMensaje: MensajeIA = { role: 'user', content: mensajeUsuario };
   historial.push(nuevoMensaje);
 
-  // 2. System prompt de Lucía
+  // 2. State machine de onboarding (hardcodeado — no pasa por Claude)
+  if (!onboardingTerminado(historial)) {
+    const resultado = procesarOnboarding(historial);
+
+    if (!resultado.completo) {
+      // Próxima pregunta del flujo de registro
+      await agregarMensajes(telefono, [nuevoMensaje, { role: 'assistant', content: resultado.respuesta }]);
+      return { reply: resultado.respuesta, herramientas_usadas: [] };
+    }
+
+    // Onboarding completo: registrar al usuario y pasar a Claude con contexto
+    const { datos } = resultado;
+    logger.info(`Onboarding completo para ${telefono}`, datos);
+
+    // Verificar si ya está registrado; si no, registrar en Capitanes
+    const yaRegistrado = await verificarRegistroTelefono(datos.telefono ?? telefono);
+    if (!yaRegistrado) {
+      await insertarCapitan({
+        nombre_capitan: datos.nombre!,
+        telefono:       datos.telefono ?? telefono,
+        sport_type:     datos.deporte! as any,
+        nivel_futbol:   (datos.deporte === 'fútbol' ? datos.nivel : 'Intermedio') as any,
+        nivel_padel:    (datos.deporte === 'pádel'  ? datos.nivel : '3ra') as any,
+        franja_horaria: datos.franjas ?? [],
+      });
+    }
+
+    // Registrar solicitud automáticamente y pasar a búsqueda
+    const { solicitud } = await crearSolicitud({
+      nombre:          datos.nombre!,
+      telefono:        datos.telefono ?? telefono,
+      deporte:         datos.deporte!,
+      nivel:           datos.nivel!,
+      horario_deseado: datos.franjas?.join(', '),
+    });
+
+    const confirmacion = `¡Listo ${datos.nombre}! Ya quedaste registrado. Estoy buscando un rival para tu partido de ${datos.deporte} (nivel ${datos.nivel}). Te aviso en cuanto confirme. ⏳`;
+    await agregarMensajes(telefono, [nuevoMensaje, { role: 'assistant', content: confirmacion }]);
+    return { reply: confirmacion, herramientas_usadas: ['registrar_solicitud'] };
+  }
+
+  // 3. System prompt de Lucía (solo para conversaciones post-onboarding)
   const systemPrompt = buildSystemPrompt(telefono);
 
   // 3. Loop agéntico
