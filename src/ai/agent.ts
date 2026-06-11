@@ -10,7 +10,7 @@ import { enviarMensajeTwilio } from '../integrations/twilio/sender.js';
 import { crearReserva, confirmarPago, obtenerReservaPorTelefono, obtenerReservaPorId, cancelarReserva, actualizarReserva } from '../db/queries/reservas.js';
 import { verificarRegistroTelefono, insertarCapitan } from '../db/queries/capitanes.js';
 import { obtenerOCrearConversacion, agregarMensajes } from '../db/queries/conversaciones.js';
-import { procesarOnboarding, onboardingTerminado } from './onboarding.js';
+import { procesarOnboarding, onboardingTerminado, MSG_CONFIRMACION } from './onboarding.js';
 import type { MensajeIA, DeporteTipo, NivelFutbol, NivelPadel } from '../types/index.js';
 import logger from '../utils/logger.js';
 
@@ -214,9 +214,8 @@ async function ejecutarHerramienta(
         const fechaTexto = fecha && hora ? ` para el *${fecha} a las ${hora}*` : '';
 
         const mensajeRival =
-          `Hola ${rivalNombre} 👋 Soy *Lucía* de Find Your Rival.\n\n` +
-          `*${solNombre}* quiere jugar un partido de *${deporte}* (nivel ${nivel})${fechaTexto} y encontramos que serían buenos rivales.\n\n` +
-          `¿Estás disponible? Responde *SÍ* o *NO* 🏆`;
+          `Hola. Encontramos un jugador compatible para jugar *${deporte}* en la franja horaria seleccionada. ` +
+          `¿Te gustaría participar?\n\n1. Sí\n2. No`;
 
         await enviarMensajeTwilio(rivalTelefono, mensajeRival);
 
@@ -333,11 +332,11 @@ export async function runAgent(
   const conv = await obtenerOCrearConversacion(telefono);
   const esConversacionNueva = !conv.mensajes || conv.mensajes.length === 0;
 
-  // Primer mensaje: saludo hardcodeado — no se deja a criterio del modelo
+  // Primer mensaje: saludo hardcodeado exacto
   if (esConversacionNueva) {
     const saludo =
-      `Hola, soy Lucía, agente de Find Your Rival 👋\n\n` +
-      `Necesito ayudarte con unos datos para agendarte un partido.\n\n` +
+      `Hola, soy Lucía, la asistente virtual de Find Your Rival. ` +
+      `Te ayudaré a encontrar un rival compatible para jugar. ` +
       `¿Cuál es tu nombre completo?`;
     await agregarMensajes(telefono, [
       { role: 'user',      content: mensajeUsuario },
@@ -386,7 +385,7 @@ export async function runAgent(
       horario_deseado: datos.franjas?.join(', '),
     });
 
-    const confirmacion = `¡Listo ${datos.nombre}! Ya quedaste registrado. Estoy buscando un rival para tu partido de ${datos.deporte} (nivel ${datos.nivel}). Te aviso en cuanto confirme. ⏳`;
+    const confirmacion = MSG_CONFIRMACION;
     await agregarMensajes(telefono, [nuevoMensaje, { role: 'assistant', content: confirmacion }]);
     return { reply: confirmacion, herramientas_usadas: ['registrar_solicitud'] };
   }

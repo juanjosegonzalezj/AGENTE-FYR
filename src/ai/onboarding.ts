@@ -1,195 +1,228 @@
 import type { MensajeIA } from '../types/index.js';
 
-// ── Mensajes exactos de cada paso ─────────────────────────────────────────────
+// ── Mensajes exactos del flujo ────────────────────────────────────────────────
 
-export const PREGUNTAS = {
-  nombre:   `¿Cuál es tu nombre completo?`,
-  telefono: `¿Cuál es tu número de celular?`,
-  deporte: `¿Qué deporte quieres jugar?\n\n1. Fútbol\n2. Pádel`,
-  nivel_futbol: `¿Cuál es tu nivel en fútbol?\n\n1. Bajo\n2. Intermedio\n3. Alto`,
-  categoria_padel: `¿Cuál es tu categoría en pádel?\n\n1. Primera (1ra)\n2. Segunda (2da)\n3. Tercera (3ra)\n4. Cuarta (4ta)\n5. Quinta (5ta)`,
-  franja: `¿En qué franja horaria prefieres jugar?\n\n1. 6am – 9am\n2. 9am – 12pm\n3. 12pm – 3pm\n4. 3pm – 6pm\n5. 6pm – 9pm\n6. 9pm – 11pm\n\nPuedes elegir más de una (ej: 2 5).`,
-};
+export const MSG_DEPORTE =
+  `¿Qué deporte deseas jugar?\n\n` +
+  `1. Fútbol\n` +
+  `2. Pádel\n\n` +
+  `Por favor responde únicamente con el número correspondiente.`;
 
-const INVALIDO_DEPORTE     = `Opción no válida. Por favor responde *1* para Fútbol o *2* para Pádel.`;
-const INVALIDO_NIVEL       = `Opción no válida. Por favor responde *1*, *2* o *3*.`;
-const INVALIDO_CATEGORIA   = `Opción no válida. Por favor responde un número del *1* al *5*.`;
-const INVALIDO_FRANJA      = `Opción no válida. Por favor responde con números del *1* al *6* (ej: 1 4 5).`;
+export const MSG_NIVEL_FUTBOL =
+  `¿Cuál es tu nivel?\n\n` +
+  `1. Alto\n` +
+  `2. Medio\n` +
+  `3. Bajo\n\n` +
+  `Por favor responde únicamente con el número de tu nivel.`;
+
+export const MSG_CATEGORIA_PADEL =
+  `¿Cuál es tu categoría?\n\n` +
+  `1. Primera\n` +
+  `2. Segunda\n` +
+  `3. Tercera\n` +
+  `4. Cuarta\n` +
+  `5. Quinta\n\n` +
+  `Por favor responde únicamente con el número de tu categoría.`;
+
+export const MSG_FRANJA =
+  `¿Qué franja horaria prefieres?\n\n` +
+  `1. 6am – 9am\n` +
+  `2. 9am – 12pm\n` +
+  `3. 12pm – 3pm\n` +
+  `4. 3pm – 6pm\n` +
+  `5. 6pm – 9pm\n` +
+  `6. 9pm – 11pm\n\n` +
+  `Por favor responde únicamente con el número de la opción.`;
+
+export const MSG_CONFIRMACION =
+  `Perfecto. Ya tenemos tu información. Estamos buscando un rival compatible para ti. ` +
+  `Te contactaré cuando encontremos un jugador que coincida con tu nivel y disponibilidad.`;
 
 // ── Mapas ─────────────────────────────────────────────────────────────────────
 
-const MAPA_DEPORTE:   Record<string, string> = { '1':'fútbol',     '2':'pádel'     };
-const MAPA_NIVEL:     Record<string, string> = { '1':'Bajo',       '2':'Intermedio','3':'Alto' };
-const MAPA_CATEGORIA: Record<string, string> = { '1':'1ra','2':'2da','3':'3ra','4':'4ta','5':'5ta' };
-const MAPA_FRANJA:    Record<string, string> = {
-  '1':'6am-9am','2':'9am-12pm','3':'12pm-3pm',
-  '4':'3pm-6pm','5':'6pm-9pm', '6':'9pm-11pm',
+// Deporte
+const MAPA_DEPORTE: Record<string, string> = { '1': 'fútbol', '2': 'pádel' };
+
+// Nivel fútbol: se muestra "Medio" pero se guarda "Intermedio" para la DB
+const MAPA_NIVEL: Record<string, string> = {
+  '1': 'Alto',
+  '2': 'Intermedio', // "Medio" en pantalla → "Intermedio" en DB
+  '3': 'Bajo',
+};
+
+// Categoría pádel
+const MAPA_CATEGORIA: Record<string, string> = {
+  '1': '1ra', '2': '2da', '3': '3ra', '4': '4ta', '5': '5ta',
+};
+
+// Franja horaria
+const MAPA_FRANJA: Record<string, string> = {
+  '1': '6am-9am',  '2': '9am-12pm', '3': '12pm-3pm',
+  '4': '3pm-6pm',  '5': '6pm-9pm',  '6': '9pm-11pm',
 };
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
 export interface DatosOnboarding {
-  nombre?:    string;
-  telefono?:  string;
-  deporte?:   'fútbol' | 'pádel';
-  nivel?:     string;    // nivel fútbol o categoría pádel
-  franjas?:   string[];
+  nombre?:   string;
+  telefono?: string;
+  deporte?:  'fútbol' | 'pádel';
+  nivel?:    string;
+  franjas?:  string[];
 }
 
 type ResultadoOnboarding =
-  | { completo: false; respuesta: string }   // devuelve la próxima pregunta o error
+  | { completo: false; respuesta: string }
   | { completo: true;  datos: DatosOnboarding };
 
-// ── Detectar en qué paso estamos leyendo el historial ─────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function ultimaRespuestaAsistente(mensajes: MensajeIA[]): string {
-  for (let i = mensajes.length - 1; i >= 0; i--) {
-    const m = mensajes[i];
+function ultimaRespuestaAsistente(msgs: MensajeIA[]): string {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
     if (m.role === 'assistant' && typeof m.content === 'string') return m.content;
   }
   return '';
 }
 
-function textoUsuario(mensajes: MensajeIA[]): string {
-  for (let i = mensajes.length - 1; i >= 0; i--) {
-    const m = mensajes[i];
+function ultimaRespuestaUsuario(msgs: MensajeIA[]): string {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
     if (m.role === 'user' && typeof m.content === 'string') return m.content.trim();
   }
   return '';
 }
 
-function extraerDatosHastaNow(mensajes: MensajeIA[]): DatosOnboarding {
+function extraerDatos(msgs: MensajeIA[]): DatosOnboarding {
   const datos: DatosOnboarding = {};
-  // Recorremos pares pregunta-respuesta para extraer datos ya confirmados
-  for (let i = 0; i < mensajes.length - 1; i++) {
-    const a = mensajes[i];
-    const b = mensajes[i + 1];
+  for (let i = 0; i < msgs.length - 1; i++) {
+    const a = msgs[i];
+    const b = msgs[i + 1];
     if (a.role !== 'assistant' || b.role !== 'user') continue;
     const pregunta  = typeof a.content === 'string' ? a.content : '';
     const respuesta = typeof b.content === 'string' ? b.content.trim() : '';
 
-    if (pregunta.includes('nombre completo') && respuesta) {
+    // Nombre — viene después del saludo inicial
+    if (pregunta.includes('nombre completo') && respuesta && !datos.nombre) {
       datos.nombre = respuesta;
     }
-    if (pregunta.includes('número de celular') && respuesta) {
-      datos.telefono = respuesta.replace(/\D/g, '');
-      if (datos.telefono.length >= 7) datos.telefono = datos.telefono; else delete datos.telefono;
+
+    // Teléfono — viene después de "Gracias, ... ¿Cuál es tu número"
+    if (pregunta.includes('número de teléfono') && respuesta && !datos.telefono) {
+      const digitos = respuesta.replace(/\D/g, '');
+      if (digitos.length >= 7) datos.telefono = digitos;
     }
-    if (pregunta.includes('Fútbol') && pregunta.includes('Pádel')) {
+
+    // Deporte
+    if (pregunta.includes('Fútbol') && pregunta.includes('Pádel') && !datos.deporte) {
       const d = MAPA_DEPORTE[respuesta];
       if (d) datos.deporte = d as 'fútbol' | 'pádel';
     }
-    if (pregunta.includes('nivel en fútbol') || pregunta.includes('categoría en pádel')) {
+
+    // Nivel / categoría
+    if ((pregunta.includes('nivel?') || pregunta.includes('categoría?')) && !datos.nivel) {
       const n = MAPA_NIVEL[respuesta] ?? MAPA_CATEGORIA[respuesta];
       if (n) datos.nivel = n;
     }
-    if (pregunta.includes('franja horaria')) {
-      const nums = respuesta.split(/\s+/);
-      const fs = nums.map(n => MAPA_FRANJA[n]).filter(Boolean);
+
+    // Franja
+    if (pregunta.includes('franja horaria') && !datos.franjas) {
+      const nums = respuesta.split(/[\s,]+/);
+      const fs   = nums.map(n => MAPA_FRANJA[n]).filter(Boolean);
       if (fs.length > 0) datos.franjas = fs;
     }
   }
   return datos;
 }
 
-// ── Función principal ─────────────────────────────────────────────────────────
+// ── Máquina de estados ────────────────────────────────────────────────────────
 
-export function procesarOnboarding(
-  mensajes: MensajeIA[],  // historial INCLUYENDO el nuevo mensaje del usuario
-): ResultadoOnboarding {
+export function procesarOnboarding(msgs: MensajeIA[]): ResultadoOnboarding {
+  const datos    = extraerDatos(msgs);
+  const ultimaIA = ultimaRespuestaAsistente(msgs);
+  const respUser = ultimaRespuestaUsuario(msgs);
 
-  const datos    = extraerDatosHastaNow(mensajes);
-  const ultimaIA = ultimaRespuestaAsistente(mensajes);
-  const respUser = textoUsuario(mensajes);
-
-  // ── Paso 1: necesitamos nombre ────────────────────────────────────────────
+  // Paso 1 — nombre
   if (!datos.nombre) {
-    // La última pregunta del asistente es la del nombre → la respuesta ES el nombre
     if (ultimaIA.includes('nombre completo') && respUser) {
       datos.nombre = respUser;
     } else {
-      return { completo: false, respuesta: PREGUNTAS.nombre };
+      return { completo: false, respuesta: `¿Cuál es tu nombre completo?` };
     }
   }
 
-  // ── Paso 2: necesitamos teléfono ──────────────────────────────────────────
+  // Paso 2 — teléfono
   if (!datos.telefono) {
-    if (ultimaIA.includes('número de celular') && respUser) {
+    if (ultimaIA.includes('número de teléfono') && respUser) {
       const digitos = respUser.replace(/\D/g, '');
       if (digitos.length >= 7) {
         datos.telefono = digitos;
       } else {
-        return { completo: false, respuesta: `Ese número no parece válido. ¿Cuál es tu número de celular?` };
+        return { completo: false, respuesta: `Ese número no parece válido. ¿Cuál es tu número de teléfono?` };
       }
     } else {
-      return { completo: false, respuesta: PREGUNTAS.telefono };
+      return { completo: false, respuesta: `Gracias, ${datos.nombre}. ¿Cuál es tu número de teléfono?` };
     }
   }
 
-  // ── Paso 3: necesitamos deporte ───────────────────────────────────────────
+  // Paso 3 — deporte
   if (!datos.deporte) {
     if (ultimaIA.includes('Fútbol') && ultimaIA.includes('Pádel')) {
       const d = MAPA_DEPORTE[respUser];
       if (d) {
         datos.deporte = d as 'fútbol' | 'pádel';
       } else {
-        return { completo: false, respuesta: `${INVALIDO_DEPORTE}\n\n${PREGUNTAS.deporte}` };
+        return { completo: false, respuesta: `Opción no válida. Por favor responde *1* para Fútbol o *2* para Pádel.\n\n${MSG_DEPORTE}` };
       }
     } else {
-      return { completo: false, respuesta: PREGUNTAS.deporte };
+      return { completo: false, respuesta: MSG_DEPORTE };
     }
   }
 
-  // ── Paso 4: necesitamos nivel / categoría ─────────────────────────────────
+  // Paso 4 — nivel / categoría
   if (!datos.nivel) {
-    const esFutbol = datos.deporte === 'fútbol';
-    const mapa     = esFutbol ? MAPA_NIVEL : MAPA_CATEGORIA;
-    const menuKey  = esFutbol ? 'nivel_futbol' : 'categoria_padel';
-    const invalido = esFutbol ? INVALIDO_NIVEL : INVALIDO_CATEGORIA;
+    const esFutbol  = datos.deporte === 'fútbol';
+    const mapa      = esFutbol ? MAPA_NIVEL : MAPA_CATEGORIA;
+    const menu      = esFutbol ? MSG_NIVEL_FUTBOL : MSG_CATEGORIA_PADEL;
+    const maxOpc    = esFutbol ? 3 : 5;
+    const esperando = (esFutbol && ultimaIA.includes('nivel?')) ||
+                      (!esFutbol && ultimaIA.includes('categoría?'));
 
-    const esperandoRespuesta =
-      (esFutbol && ultimaIA.includes('nivel en fútbol')) ||
-      (!esFutbol && ultimaIA.includes('categoría en pádel'));
-
-    if (esperandoRespuesta) {
+    if (esperando) {
       const n = mapa[respUser];
       if (n) {
         datos.nivel = n;
       } else {
-        return { completo: false, respuesta: `${invalido}\n\n${PREGUNTAS[menuKey]}` };
+        return { completo: false, respuesta: `Opción no válida. Por favor responde un número del *1* al *${maxOpc}*.\n\n${menu}` };
       }
     } else {
-      return { completo: false, respuesta: PREGUNTAS[menuKey] };
+      return { completo: false, respuesta: menu };
     }
   }
 
-  // ── Paso 5: necesitamos franja ────────────────────────────────────────────
+  // Paso 5 — franja
   if (!datos.franjas) {
     if (ultimaIA.includes('franja horaria')) {
-      const nums = respUser.split(/\s+/);
+      const nums = respUser.split(/[\s,]+/);
       const fs   = nums.map(n => MAPA_FRANJA[n]).filter(Boolean);
       if (fs.length > 0) {
         datos.franjas = fs;
       } else {
-        return { completo: false, respuesta: `${INVALIDO_FRANJA}\n\n${PREGUNTAS.franja}` };
+        return { completo: false, respuesta: `Opción no válida. Por favor responde con números del *1* al *6*.\n\n${MSG_FRANJA}` };
       }
     } else {
-      return { completo: false, respuesta: PREGUNTAS.franja };
+      return { completo: false, respuesta: MSG_FRANJA };
     }
   }
 
-  // ── Onboarding completo ───────────────────────────────────────────────────
   return { completo: true, datos };
 }
 
-// Devuelve true si el historial ya superó el onboarding (hay mensajes de Claude sobre partido)
-export function onboardingTerminado(mensajes: MensajeIA[]): boolean {
-  // Si el historial tiene más de 12 mensajes, el onboarding ya terminó hace rato
-  if (mensajes.length > 12) return true;
-  // O si algún mensaje del asistente habla de "buscando rival" o herramientas
-  return mensajes.some(m =>
+export function onboardingTerminado(msgs: MensajeIA[]): boolean {
+  if (msgs.length > 14) return true;
+  return msgs.some(m =>
     m.role === 'assistant' &&
     typeof m.content === 'string' &&
-    (m.content.includes('buscando un rival') || m.content.includes('Estoy buscando') || m.content.includes('rival compatible'))
+    (m.content.includes('Estamos buscando') || m.content.includes('rival compatible') || m.content.includes('Buenas noticias'))
   );
 }

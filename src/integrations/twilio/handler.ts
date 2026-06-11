@@ -17,13 +17,19 @@ function esMensajeDePago(texto: string): boolean {
 }
 
 function esConfirmacionPositiva(texto: string): boolean {
+  const t = texto.toLowerCase().trim();
+  // Acepta "1" (opción del menú 1. Sí) o palabras afirmativas
+  if (t === '1') return true;
   const si = ['sí','si','yes','claro','dale','va','perfecto','confirmo','de acuerdo','ok','okey','listo'];
-  return si.some(p => texto.toLowerCase().trim() === p || texto.toLowerCase().trim().startsWith(p));
+  return si.some(p => t === p || t.startsWith(p));
 }
 
 function esConfirmacionNegativa(texto: string): boolean {
-  const no = ['no','nel','nope','no puedo','no puedó','cancelar','rechazar'];
-  return no.some(p => texto.toLowerCase().trim() === p || texto.toLowerCase().trim().startsWith(p));
+  const t = texto.toLowerCase().trim();
+  // Acepta "2" (opción del menú 2. No) o palabras negativas
+  if (t === '2') return true;
+  const no = ['no','nel','nope','no puedo','cancelar','rechazar'];
+  return no.some(p => t === p || t.startsWith(p));
 }
 
 export async function handleTwilioWebhook(req: Request, res: Response): Promise<void> {
@@ -91,16 +97,13 @@ async function procesarRespuestaRival(
     });
 
     await responder(
-      `✅ ¡Perfecto ${rivalNombre}! Confirmaste tu disponibilidad.\n\n` +
-      `En breve Lucía les enviará los detalles de la reserva a ambos. 🏆`
+      `Perfecto. Confirmaste tu disponibilidad. En breve recibirás los detalles del partido.`
     );
 
-    // Notificar al solicitante para que continúe el proceso con Lucía
+    // Notificar al solicitante — mensaje exacto de la especificación
     await enviarMensajeTwilio(
       solicitanteTelefono,
-      `🎯 *¡Buenas noticias ${solicitanteNombre}!*\n\n` +
-      `*${rivalNombre}* confirmó su disponibilidad para jugar contigo.\n\n` +
-      `Escríbeme para proceder con la reserva y el pago. 💪`
+      `¡Buenas noticias! Encontramos un rival compatible para ti. En breve recibirás los detalles del partido.`
     );
 
     logger.info(`Rival ${rivalNombre} confirmó para solicitud #${solicitud!.id}`);
