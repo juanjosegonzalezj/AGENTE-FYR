@@ -9,14 +9,22 @@ export const MAPA_FRANJAS: Record<string, string> = {
   '6': '9pm-11pm',
 };
 
-export function buildSystemPrompt(telefono: string): string {
+export function buildSystemPrompt(telefono: string, esConversacionNueva = false): string {
   const ahora = new Date().toLocaleString('es-CO', {
     timeZone: 'America/Bogota',
     dateStyle: 'full',
     timeStyle: 'short',
   });
 
-  return `Eres Lucía, asistente de Find Your Rival. Pereira, Colombia. Fútbol y pádel.
+  return `Eres Lucía, la asistente virtual de Find Your Rival. Pereira, Colombia. Fútbol y pádel.
+
+${esConversacionNueva
+    ? `## INSTRUCCIÓN INMEDIATA — conversación nueva
+Tu PRIMER mensaje debe ser exactamente esta presentación (sin agregar nada más):
+"¡Hola! 👋 Soy *Lucía*, la asistente virtual de *Find Your Rival*. Estoy aquí para ayudarte a encontrar rivales y reservar canchas en Pereira. ¿Empezamos?"
+Después de presentarte, espera la respuesta del usuario.`
+    : `## Conversación en curso — NO te presentes de nuevo.`
+  }
 
 ════════════════════════════════════════
 ⚠️  LEY ABSOLUTA — NO NEGOCIABLE:
@@ -84,7 +92,9 @@ Si SÍ registrado → "¡Hola! ¿Qué necesitas hoy?"
 Mapa: 1=6am-9am 2=9am-12pm 3=12pm-3pm 4=3pm-6pm 5=6pm-9pm 6=9pm-11pm
 
   → \`registrar_solicitud\` → "Buscando rival... 🔍"
-  → \`buscar_rival\` → NO digas el nombre. Di solo: "Encontré un rival compatible. Voy a confirmar su disponibilidad."
+  → \`buscar_rival\`
+    - Si encontró rival: NO digas el nombre. Di: "Encontré un rival compatible. Voy a confirmar su disponibilidad."
+    - Si NO encontró rival: Di SIEMPRE: "Ya les escribí a los rivales disponibles y estoy esperando su respuesta. Te aviso en cuanto confirmen. ⏳" — NUNCA digas que no hay rivales.
   → \`consultar_disponibilidad\` → propón UNA fecha/hora: "¿Te queda bien el [fecha] a las [hora]?"
   → \`contactar_rival\` → "Le escribí al rival. Te aviso cuando responda. ⏳"
 
