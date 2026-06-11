@@ -62,7 +62,31 @@ async function ejecutarHerramienta(
           franja:               input.franja_horaria as string | undefined,
           telefono_solicitante: input.telefono_solicitante as string,
         });
-        return JSON.stringify(resultado);
+
+        if (!resultado.encontrado || resultado.candidatos.length === 0) {
+          return JSON.stringify({ encontrado: false, mensaje: resultado.mensaje });
+        }
+
+        // Ocultar nombre/teléfono del rival — solo se revelan cuando confirme.
+        // Se exponen como campos PRIVADO para que el agente los use en contactar_rival
+        // sin mostrarlos al usuario.
+        const candidatosFiltrados = resultado.candidatos.map((c, i) => ({
+          rival_index:            i,
+          rival_nombre_PRIVADO:   c.nombre,
+          rival_telefono_PRIVADO: c.telefono,
+          deporte:                c.sport_type,
+          nivel_futbol:           c.nivel_futbol,
+          nivel_padel:            c.nivel_padel,
+          franjas:                c.franja_horaria,
+          fuente:                 c.fuente,
+        }));
+
+        return JSON.stringify({
+          encontrado: true,
+          mensaje:    resultado.mensaje,
+          candidatos: candidatosFiltrados,
+          instruccion: 'NO reveles el nombre ni teléfono del rival al usuario. Usa rival_nombre_PRIVADO y rival_telefono_PRIVADO solo para llamar a contactar_rival.',
+        });
       }
 
       case 'consultar_disponibilidad': {
