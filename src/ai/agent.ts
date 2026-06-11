@@ -331,12 +331,26 @@ export async function runAgent(
   // 1. Cargar historial de conversación
   const conv = await obtenerOCrearConversacion(telefono);
   const esConversacionNueva = !conv.mensajes || conv.mensajes.length === 0;
+
+  // Primer mensaje: saludo hardcodeado — no se deja a criterio del modelo
+  if (esConversacionNueva) {
+    const saludo =
+      `Hola, soy Lucía, agente de Find Your Rival 👋\n\n` +
+      `Necesito ayudarte con unos datos para agendarte un partido.\n\n` +
+      `¿Cuál es tu nombre completo?`;
+    await agregarMensajes(telefono, [
+      { role: 'user',      content: mensajeUsuario },
+      { role: 'assistant', content: saludo },
+    ]);
+    return { reply: saludo, herramientas_usadas: [] };
+  }
+
   const historial: MensajeIA[] = [...(conv.mensajes ?? [])];
   const nuevoMensaje: MensajeIA = { role: 'user', content: mensajeUsuario };
   historial.push(nuevoMensaje);
 
-  // 2. System prompt de Lucía (indica si es conversación nueva para que se presente)
-  const systemPrompt = buildSystemPrompt(telefono, esConversacionNueva);
+  // 2. System prompt de Lucía
+  const systemPrompt = buildSystemPrompt(telefono);
 
   // 3. Loop agéntico
   const herramientasUsadas: string[] = [];
